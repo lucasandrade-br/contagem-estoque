@@ -1626,7 +1626,6 @@ def registrar_ocorrencia():
         return jsonify({'erro': str(e)}), 500
 
 
-
 @app.route('/api/vincular_ocorrencia', methods=['POST'])
 def vincular_ocorrencia():
     if not session.get('is_gerente'): 
@@ -1642,21 +1641,59 @@ def vincular_ocorrencia():
     ocorrencia = db.execute('SELECT * FROM ocorrencias WHERE id = ?', (id_ocorrencia,)).fetchone()
     if not ocorrencia:
         return jsonify({'erro': 'Ocorrência não encontrada'}), 404
+
+    # --- NOVO: BUSCA DADOS DO PRODUTO DESTINO PARA O SNAPSHOT ---
+    # Precisamos saber preço e unidade padrão para gravar o histórico corretamente
+    produto = db.execute('''
+        SELECT p.preco_custo, p.id_unidade_padrao, u.sigla as sigla_padrao
+        FROM produtos p
+        JOIN unidades_medida u ON p.id_unidade_padrao = u.id
+        WHERE p.id = ?
+    ''', (id_produto_destino,)).fetchone()
+    
+    if not produto:
+        return jsonify({'erro': 'Produto destino não encontrado'}), 404
+
+    # --- NOVO: CÁLCULO DO FATOR DE CONVERSÃO ---
+    fator_conversao = 1.0
+    id_unidade_usada = int(ocorrencia['id_unidade'])
+    id_unidade_padrao = int(produto['id_unidade_padrao'])
+
+    if id_unidade_usada != id_unidade_padrao:
+        fator_row = db.execute('''
+            SELECT fator_conversao FROM produtos_unidades 
+            WHERE id_produto = ? AND id_unidade = ?
+        ''', (id_produto_destino, id_unidade_usada)).fetchone()
+        
+        if fator_row:
+            fator_conversao = float(fator_row['fator_conversao'])
+        # Se não achar conversão, mantém 1.0 (segurança)
+
+    # --- NOVO: PREPARA OS VALORES DO SNAPSHOT ---
+    qtd_informada = float(ocorrencia['quantidade'])
+    qtd_padrao = qtd_informada * fator_conversao
+    preco_snapshot = float(produto['preco_custo'] or 0)
+    sigla_snapshot = produto['sigla_padrao']
         
     try:
-        # 2. Insere na tabela contagens (CORREÇÃO: Adicionado id_usuario)
-        # Estamos usando o ID do gerente logado, pois ele validou a operação
+        # 2. Insere na tabela contagens (COM OS CAMPOS NOVOS OBRIGATÓRIOS)
         db.execute('''
             INSERT INTO contagens 
-            (id_inventario, id_local, id_produto, quantidade, id_unidade_usada, id_usuario, data_hora)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            (id_inventario, id_local, id_produto, quantidade, id_unidade_usada, id_usuario, data_hora,
+             fator_conversao, quantidade_padrao, preco_custo_snapshot, unidade_padrao_sigla)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
         ''', (
             ocorrencia['id_inventario'], 
             ocorrencia['id_local'], 
             id_produto_destino, 
-            ocorrencia['quantidade'], 
-            ocorrencia['id_unidade'],
-            session.get('user_id')  # <--- AQUI ESTAVA FALTANDO
+            qtd_informada, 
+            id_unidade_usada,
+            session.get('user_id'),
+            # Novos campos do Snapshot:
+            fator_conversao,
+            qtd_padrao,
+            preco_snapshot,
+            sigla_snapshot
         ))
         
         # 3. Marca ocorrência como resolvida
@@ -1673,6 +1710,8 @@ def vincular_ocorrencia():
         db.rollback()
         print(f"Erro ao vincular: {e}")
         return jsonify({'erro': str(e)}), 500
+
+
 
 @app.route('/api/cadastrar_da_ocorrencia', methods=['POST'])
 def cadastrar_da_ocorrencia():
