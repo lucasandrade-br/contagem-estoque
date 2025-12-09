@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Catálogo de Produtos{% endblock %}
+
+{% block content %}
+<div class="min-h-screen p-6">
+    <div class="max-w-6xl mx-auto">
+        <!-- Cabeçalho -->
+        <div class="flex items-center justify-between mb-8">
+            <h1 class="text-3xl font-bold text-amber-500">
+                Catálogo de Produtos
+            </h1>
+            <a href="{{ url_for('dashboard') }}" 
+               class="bg-slate-700 hover:bg-slate-600 px-6 py-3 rounded-lg transition-colors font-medium">
+                ← Voltar ao Dashboard
+            </a>
+        </div>
+        
+        <!-- Campo de Busca -->
+        <div class="mb-6">
+            <input type="text" 
+                   id="busca-produto" 
+                   placeholder="Buscar por nome ou código de barras..." 
+                   class="w-full text-lg p-4 bg-slate-800 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+        </div>
+        
+        <!-- Tabela de Produtos -->
+        <div class="bg-slate-800 rounded-xl p-6 shadow-xl overflow-x-auto">
+            <table class="w-full table-auto text-left">
+                <thead class="bg-slate-700">
+                    <tr>
+                        <th class="p-3 text-gray-300 font-semibold">Código</th>
+                        <th class="p-3 text-gray-300 font-semibold">Nome</th>
+                        <th class="p-3 text-gray-300 font-semibold">Categoria</th>
+                        <th class="p-3 text-gray-300 font-semibold">Unidade Padrão</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-produtos">
+                    {% for produto in produtos %}
+                    <tr class="border-t border-slate-700 hover:bg-slate-700/50 produto-row" 
+                        data-nome="{{ produto.nome.lower() }}">
+                        <td class="p-3 text-gray-100 font-medium">{{ produto.nome }}</td>
+                        <td class="p-3 text-gray-300">{{ produto.categoria or '-' }}</td>
+                        <td class="p-3 text-gray-300">{{ produto.unidade_sigla }} ({{ produto.unidade_nome }})</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            {% if not produtos %}
+            <div class="text-center py-8 text-gray-400">
+                Nenhum produto cadastrado.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+const inputBusca = document.getElementById('busca-produto');
+const linhas = document.querySelectorAll('.produto-row');
+
+inputBusca.addEventListener('input', function() {
+    const termo = this.value.toLowerCase().trim();
+    
+    linhas.forEach(linha => {
+        const nome = linha.getAttribute('data-nome');
+        const codigo = linha.getAttribute('data-codigo');
+        
+        if (nome.includes(termo) || codigo.includes(termo)) {
+            linha.classList.remove('hidden');
+        } else {
+            linha.classList.add('hidden');
+        }
+    });
+});
+</script>
+{% endblock %}
+

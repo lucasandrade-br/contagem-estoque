@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}Análise de Importação ERP{% endblock %}
+
+{% block content %}
+<div class="min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+        <div class="flex items-center justify-between mb-8">
+            <h1 class="text-3xl font-bold text-amber-500">
+                Análise de Importação
+            </h1>
+            <div class="flex gap-3">
+                <a href="{{ url_for('upload_erp') }}" 
+                   class="bg-slate-700 hover:bg-slate-600 px-6 py-3 rounded-lg transition-colors font-medium">
+                    ← Voltar
+                </a>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div class="bg-slate-800 rounded-xl p-6">
+                <div class="text-3xl font-bold text-emerald-400 mb-2">{{ novos|length }}</div>
+                <p class="text-gray-400">Produtos Novos</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-6">
+                <div class="text-3xl font-bold text-blue-400 mb-2">{{ existentes|length }}</div>
+                <p class="text-gray-400">Produtos a Atualizar</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-6">
+                <div class="text-3xl font-bold text-amber-400 mb-2">{{ novos|length + existentes|length }}</div>
+                <p class="text-gray-400">Total de Registros</p>
+            </div>
+        </div>
+        
+        <div class="flex gap-4 mb-6">
+            <button onclick="abaAtiva('novos')" 
+                    id="aba-novos-btn"
+                    class="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition-colors">
+                ✓ Novos ({{ novos|length }})
+            </button>
+            <button onclick="abaAtiva('existentes')" 
+                    id="aba-existentes-btn"
+                    class="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-gray-100 font-semibold rounded-lg transition-colors">
+                📝 Atualizar ({{ existentes|length }})
+            </button>
+        </div>
+        
+        <div id="aba-novos" class="bg-slate-800 rounded-xl p-6 shadow-xl">
+            <h2 class="text-xl font-semibold text-gray-100 mb-4">
+                Produtos Novos para Importação
+            </h2>
+            
+            {% if novos|length > 0 %}
+            <div class="overflow-x-auto">
+                <div class="mb-4 flex items-center gap-3 bg-slate-700/50 p-3 rounded">
+                    <input type="checkbox" 
+                           id="select-all" 
+                           class="w-5 h-5 rounded"
+                           onchange="selecionarTodos(this)">
+                    <label for="select-all" class="text-gray-300 font-medium cursor-pointer">
+                        Selecionar Todos ({{ novos|length }} produtos)
+                    </label>
+                </div>
+                
+                <table class="w-full table-auto text-left text-sm">
+                    <thead class="bg-slate-700">
+                        <tr>
+                            <th class="p-3 w-12">
+                                <input type="checkbox" class="w-4 h-4 hidden">
+                            </th>
+                            <th class="p-3 text-gray-300 font-semibold">ID ERP</th>
+                            <th class="p-3 text-gray-300 font-semibold">GTIN</th>
+                            <th class="p-3 text-gray-300 font-semibold">Nome</th>
+                            <th class="p-3 text-gray-300 font-semibold">Categoria</th>
+                            <th class="p-3 text-gray-300 font-semibold">Unidade</th>
+                            <th class="p-3 text-gray-300 font-semibold">Custo</th>
+                            <th class="p-3 text-gray-300 font-semibold">Venda</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for produto in novos %}
+                        <tr class="border-t border-slate-700 hover:bg-slate-700/50">
+                            <td class="p-3">
+                                <input type="checkbox" 
+                                       name="novos-cb" 
+                                       value="{{ produto.id_erp }}" 
+                                       class="w-4 h-4 rounded"
+                                       onchange="atualizarSelectAll()">
+                            </td>
+                            <td class="p-3 text-amber-400 font-mono">{{ produto.id_erp }}</td>
+                            <td class="p-3 text-amber-400 font-mono">{{ produto.gtin or '-' }}</td>
+                            <td class="p-3 text-gray-100 font-medium">{{ produto.nome }}</td>
+                            <td class="p-3 text-gray-300">{{ produto.categoria or '-' }}</td>
+                            <td class="p-3 text-gray-300">{{ produto.und_str }}</td>
+                            <td class="p-3 text-gray-400">R$ {{ "%.2f" | format(produto.preco_custo) }}</td>
+                            <td class="p-3 text-emerald-400 font-semibold">R$ {{ "%.2f" | format(produto.preco_venda) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-8 text-gray-400">
+                Nenhum produto novo encontrado.
+            </div>
+            {% endif %}
+        </div>
+        
+        <div id="aba-existentes" class="bg-slate-800 rounded-xl p-6 shadow-xl hidden">
+            <h2 class="text-xl font-semibold text-gray-100 mb-4">
+                Produtos Existentes (Comparativo Completo)
+            </h2>
+            
+            {% if existentes|length > 0 %}
+            <div class="overflow-x-auto">
+                <table class="w-full table-auto text-left text-sm">
+                    <thead class="bg-slate-700">
+                        <tr>
+                            <th class="p-3 text-gray-300 font-semibold">ID</th>
+                            
+                            <th class="p-3 text-gray-300 font-semibold">Nome Atual</th>
+                            <th class="p-3 text-amber-300 font-semibold border-l border-slate-600">Nome Novo (Excel)</th>
+                            
+                            <th class="p-3 text-rose-300 font-semibold border-l border-slate-600">Custo Atual</th>
+                            <th class="p-3 text-rose-300 font-semibold">Custo Novo</th>
+                            
+                            <th class="p-3 text-emerald-300 font-semibold border-l border-slate-600">Venda Atual</th>
+                            <th class="p-3 text-emerald-300 font-semibold">Venda Nova</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for produto in existentes %}
+                        <tr class="border-t border-slate-700 hover:bg-slate-700/50">
+                            <td class="p-3 text-amber-400 font-mono">{{ produto.id_erp }}</td>
+                            
+                            <td class="p-3 text-amber-400 font-mono">{{ produto.nome }}</td>
+                            
+                            <td class="p-3 font-medium border-l border-slate-700 {{ 'text-amber-400' if produto.nome != produto.nome_novo else 'text-gray-500' }}">
+                                {{ produto.nome_novo }}
+                            </td>
+                            
+                            <td class="p-3 text-gray-500 border-l border-slate-700">
+                                R$ {{ "%.2f" | format(produto.custo_atual) }}
+                            </td>
+                            
+                            <td class="p-3 font-bold {{ 'text-rose-400' if produto.custo_novo != produto.custo_atual else 'text-gray-600' }}">
+                                R$ {{ "%.2f" | format(produto.custo_novo) }}
+                            </td>
+                            
+                            <td class="p-3 text-gray-500 border-l border-slate-700">
+                                R$ {{ "%.2f" | format(produto.venda_atual) }}
+                            </td>
+                            
+                            <td class="p-3 font-bold {{ 'text-emerald-400' if produto.venda_novo != produto.venda_atual else 'text-gray-600' }}">
+                                R$ {{ "%.2f" | format(produto.venda_novo) }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-8 text-gray-400">
+                Nenhum produto para atualizar.
+            </div>
+            {% endif %}
+        </div>
+
+
+
+        
+        <div class="mt-8 flex gap-4">
+            <a href="{{ url_for('upload_erp') }}" 
+               class="flex-1 bg-slate-700 hover:bg-slate-600 text-gray-100 font-semibold py-3 rounded-lg transition-colors text-center">
+                ← Cancelar e Voltar
+            </a>
+            <button onclick="confirmarImportacao()" 
+                    data-total-existentes="{{ existentes|length }}"
+                    class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-lg transition-colors">
+                ✓ Confirmar Importação
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function abaAtiva(aba) {
+    document.getElementById('aba-novos').classList.add('hidden');
+    document.getElementById('aba-existentes').classList.add('hidden');
+    
+    document.getElementById('aba-novos-btn').classList.remove('bg-emerald-500', 'hover:bg-emerald-600');
+    document.getElementById('aba-novos-btn').classList.add('bg-slate-700', 'hover:bg-slate-600');
+    document.getElementById('aba-existentes-btn').classList.remove('bg-emerald-500', 'hover:bg-emerald-600');
+    document.getElementById('aba-existentes-btn').classList.add('bg-slate-700', 'hover:bg-slate-600');
+    
+    if (aba === 'novos') {
+        document.getElementById('aba-novos').classList.remove('hidden');
+        document.getElementById('aba-novos-btn').classList.remove('bg-slate-700', 'hover:bg-slate-600');
+        document.getElementById('aba-novos-btn').classList.add('bg-emerald-500', 'hover:bg-emerald-600');
+    } else if (aba === 'existentes') {
+        document.getElementById('aba-existentes').classList.remove('hidden');
+        document.getElementById('aba-existentes-btn').classList.remove('bg-slate-700', 'hover:bg-slate-600');
+        document.getElementById('aba-existentes-btn').classList.add('bg-emerald-500', 'hover:bg-emerald-600');
+    }
+}
+
+function selecionarTodos(checkbox) {
+    const checkboxes = document.querySelectorAll('input[name="novos-cb"]');
+    checkboxes.forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
+    atualizarSelectAll();
+}
+
+function atualizarSelectAll() {
+    const checkboxes = document.querySelectorAll('input[name="novos-cb"]');
+    const selectAll = document.getElementById('select-all');
+    const todos_marcados = Array.from(checkboxes).every(cb => cb.checked);
+    selectAll.checked = todos_marcados;
+}
+
+async function confirmarImportacao() {
+    const checkboxes = document.querySelectorAll('input[name="novos-cb"]:checked');
+    // CORREÇÃO: Removemos o parseInt para suportar IDs alfanuméricos
+    const novos_ids = Array.from(checkboxes).map(cb => cb.value);
+    
+    const button = event.target;
+    const total_existentes = parseInt(button.getAttribute('data-total-existentes'));
+    
+    if (novos_ids.length === 0 && total_existentes === 0) {
+        alert('Nenhum produto selecionado para importação.');
+        return;
+    }
+    
+    if (!confirm('Deseja confirmar a importação? Esta ação não pode ser desfeita.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/admin/confirmar_importacao', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                novos_ids: novos_ids
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.sucesso) {
+            // CORREÇÃO: Usamos data.msg em vez de data.mensagem
+            alert(data.msg);
+            window.location.href = '{{ url_for("dashboard") }}';
+        } else {
+            alert(data.erro || 'Erro ao confirmar importação.');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao confirmar importação. Tente novamente.');
+    }
+}
+</script>
+{% endblock %}

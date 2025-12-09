@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Seleção de Usuário - Contagem de Estoque{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-center h-screen relative">
+    <!-- Botão Área do Gerente -->
+    <a href="{{ url_for('login_admin') }}" 
+       class="absolute top-4 right-4 text-amber-500 hover:text-amber-400 transition-colors text-sm font-medium flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+        </svg>
+        Área do Gerente
+    </a>
+    
+    <div class="bg-slate-800 p-8 rounded-xl shadow-2xl max-w-md w-full">
+        <!-- Título -->
+        <h1 class="text-4xl font-bold text-amber-500 text-center mb-2">
+            Contagem de Estoque
+        </h1>
+        
+        <!-- Subtítulo -->
+        <p class="text-gray-400 text-center mb-8">
+            Quem é você?
+        </p>
+        
+        <!-- Lista de Usuários (apenas Estoquistas) -->
+        <div class="space-y-3">
+            {% for usuario in usuarios %}
+                {% if usuario.funcao != 'Gerente' %}
+                <a href="{{ url_for('selecionar_usuario', user_id=usuario.id) }}" 
+                   class="w-full block p-4 mb-3 rounded-lg bg-slate-700 hover:bg-amber-500 text-gray-100 hover:text-slate-900 transition-all duration-300 text-center font-medium">
+                    {{ usuario.nome }}
+                    <span class="block text-sm mt-1 opacity-75">
+                        {{ usuario.funcao }}
+                    </span>
+                </a>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Floating QR button -->
+<button onclick="openQrModal()" class="fixed right-6 bottom-6 bg-amber-500 hover:bg-amber-400 text-slate-900 px-4 py-3 rounded-full shadow-lg flex items-center gap-2 z-40">
+    <span>🔗</span>
+    <span class="text-sm font-bold">Compartilhar Acesso</span>
+</button>
+
+<!-- QR Modal (index) -->
+<div id="qr-modal" class="fixed inset-0 hidden items-center justify-center bg-black/60 z-50">
+    <div class="bg-slate-800 rounded-lg p-6 max-w-sm w-full text-center">
+        <h3 class="text-lg font-bold text-gray-100 mb-4">Compartilhar Acesso</h3>
+        <div class="flex justify-center mb-4">
+            <img src="{{ url_for('gerar_qrcode') }}" alt="QR Code" class="w-64 h-64 object-contain" />
+        </div>
+        <p class="text-sm text-gray-300 mb-4">IP: <span class="font-mono text-emerald-300">{{ local_ip }}</span></p>
+        <button onclick="closeQrModal()" class="px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded">Fechar</button>
+    </div>
+</div>
+
+<script>
+function openQrModal(){
+    document.getElementById('qr-modal').classList.remove('hidden');
+    document.getElementById('qr-modal').classList.add('flex');
+}
+function closeQrModal(){
+    document.getElementById('qr-modal').classList.remove('flex');
+    document.getElementById('qr-modal').classList.add('hidden');
+}
+</script>
+</div>
+{% endblock %}
+

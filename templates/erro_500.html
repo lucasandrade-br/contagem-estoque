@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center px-4">
+    <div class="text-center">
+        <div class="mb-8">
+            <h1 class="text-9xl font-bold text-rose-500 mb-4">500</h1>
+            <h2 class="text-4xl font-bold text-gray-100 mb-4">Erro Interno do Servidor</h2>
+            <p class="text-xl text-gray-400 mb-8 max-w-md mx-auto">
+                Ocorreu um problema no servidor. Tente novamente em alguns momentos ou contate o suporte se o problema persistir.
+            </p>
+        </div>
+
+        <div class="bg-slate-800 rounded-lg border border-slate-700 p-6 mb-8 text-left max-w-md mx-auto">
+            <p class="text-sm text-gray-400 font-mono break-words">
+                {% if erro %}
+                    <span class="text-rose-400">Detalhes:</span> {{ erro[:200] }}...
+                {% else %}
+                    <span class="text-rose-400">Detalhes:</span> Erro desconhecido
+                {% endif %}
+            </p>
+        </div>
+        
+        <div class="space-y-4">
+            <button onclick="location.reload()" class="inline-block bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 px-8 rounded-lg transition shadow-lg shadow-amber-900/30">
+                🔄 Tentar Novamente
+            </button>
+            <br>
+            <a href="{{ url_for('dashboard') }}" class="inline-block bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-8 rounded-lg transition">
+                ← Voltar ao Dashboard
+            </a>
+        </div>
+
+        <div class="mt-12 pt-8 border-t border-slate-700">
+            <p class="text-gray-500 text-sm">
+                Se o problema persistir, contate o suporte técnico.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
