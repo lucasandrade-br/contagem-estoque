@@ -3,12 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Ignorar banco de dados (o setup_db.py cria um novo para quem baixar)
+# Ignorar o arquivo de banco de dados (o binário), mas permitir a pasta
 *.db
-database/
-
-# Ignorar instaladores pesados
-instaladores/
 
 # Ignorar ambientes virtuais (se houver)
 venv/
