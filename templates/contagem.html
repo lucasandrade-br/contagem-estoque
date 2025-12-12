@@ -524,7 +524,14 @@ inputBusca.addEventListener('input', function() {
     
     const resultados = todosProdutos.filter(produto => {
         const nome = produto.nome.toLowerCase();
-        return nome.includes(termo);
+        const gtin = String(produto.gtin || '').toLowerCase();
+        const erp = String(produto.id_erp || '').toLowerCase();
+        
+        // Verifica se o termo digitado está em QUALQUER um dos campos
+        return nome.includes(termo) || 
+               gtin.includes(termo) || 
+               erp.includes(termo);
+        
     });
     
     if (resultados.length === 0) {
