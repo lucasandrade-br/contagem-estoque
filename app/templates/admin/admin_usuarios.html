@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Usuários{% endblock %}
+
+{% block content %}
+<div class="min-h-screen p-6">
+    <div class="max-w-6xl mx-auto">
+        <!-- Cabeçalho -->
+        <div class="flex items-center justify-between mb-8">
+            <h1 class="text-3xl font-bold text-amber-500">
+                Gerenciar Usuários
+            </h1>
+            <a href="{{ url_for('admin.dashboard') }}" 
+               class="bg-slate-700 hover:bg-slate-600 px-6 py-3 rounded-lg transition-colors font-medium">
+                ← Voltar ao Dashboard
+            </a>
+        </div>
+        
+        <!-- Mensagens Flash -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="mb-4 p-4 rounded-lg {% if category == 'error' %}bg-rose-500/20 text-rose-400{% else %}bg-emerald-500/20 text-emerald-400{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Formulário de Novo/Editar -->
+        <div class="bg-slate-800 rounded-xl p-6 shadow-xl mb-6">
+            <h2 class="text-xl font-semibold text-gray-100 mb-4" id="form-title">Novo Usuário</h2>
+            <form method="POST" id="form-usuario" class="space-y-4">
+                <input type="hidden" name="action" value="save">
+                <input type="hidden" name="usuario_id" id="usuario_id">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="nome" class="block text-gray-300 mb-2">Nome *</label>
+                        <input type="text" 
+                               id="nome" 
+                               name="nome" 
+                               required
+                               class="w-full px-4 py-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    
+                    <div>
+                        <label for="funcao" class="block text-gray-300 mb-2">Função *</label>
+                        <select id="funcao" 
+                                name="funcao" 
+                                required
+                                onchange="toggleSenha()"
+                                class="w-full px-4 py-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            <option value="">Selecione...</option>
+                            <option value="Gerente">Gerente</option>
+                            <option value="Estoquista">Estoquista</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="senha-container" class="hidden">
+                    <label for="senha" class="block text-gray-300 mb-2">Senha <span class="text-rose-500">*</span></label>
+                    <input type="password" 
+                           id="senha" 
+                           name="senha" 
+                           class="w-full px-4 py-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <p class="text-xs text-gray-400 mt-1">Obrigatória para Gerentes</p>
+                </div>
+                
+                <div>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" 
+                               id="ativo" 
+                               name="ativo" 
+                               checked
+                               class="w-5 h-5 rounded bg-slate-700 text-amber-500 focus:ring-amber-500">
+                        <span class="text-gray-300">Usuário Ativo</span>
+                    </label>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button type="submit" 
+                            class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors">
+                        Salvar
+                    </button>
+                    <button type="button" 
+                            onclick="limparForm()"
+                            class="bg-slate-700 hover:bg-slate-600 text-gray-100 font-semibold px-6 py-3 rounded-lg transition-colors">
+                        Limpar
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Tabela de Usuários -->
+        <div class="bg-slate-800 rounded-xl p-6 shadow-xl overflow-x-auto">
+            <h2 class="text-xl font-semibold text-gray-100 mb-4">Lista de Usuários</h2>
+            <table class="w-full table-auto text-left">
+                <thead class="bg-slate-700">
+                    <tr>
+                        <th class="p-3 text-gray-300 font-semibold">Nome</th>
+                        <th class="p-3 text-gray-300 font-semibold">Função</th>
+                        <th class="p-3 text-gray-300 font-semibold">Status</th>
+                        <th class="p-3 text-gray-300 font-semibold">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for usuario in usuarios %}
+                    <tr class="border-t border-slate-700 hover:bg-slate-700/50">
+                        <td class="p-3 text-gray-100">{{ usuario.nome }}</td>
+                        <td class="p-3 text-gray-300">{{ usuario.funcao }}</td>
+                        <td class="p-3">
+                            {% if usuario.ativo %}
+                                <span class="text-emerald-400">● Ativo</span>
+                            {% else %}
+                                <span class="text-rose-400">● Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3">
+                            <div class="flex gap-2">
+                                <button onclick="editarUsuario({{ usuario.id }}, '{{ usuario.nome }}', '{{ usuario.funcao }}', {{ 1 if usuario.ativo else 0 }})" 
+                                        class="text-amber-500 hover:text-amber-400 transition-colors">
+                                    ✏️ Editar
+                                </button>
+                                {% if usuario.ativo %}
+                                <form method="POST" class="inline" onsubmit="return confirm('Deseja desativar este usuário?');">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                    <button type="submit" 
+                                            class="text-rose-500 hover:text-rose-400 transition-colors">
+                                        🗑️ Desativar
+                                    </button>
+                                </form>
+                                {% else %}
+                                <form method="POST" class="inline">
+                                    <input type="hidden" name="action" value="save">
+                                    <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                    <input type="hidden" name="nome" value="{{ usuario.nome }}">
+                                    <input type="hidden" name="funcao" value="{{ usuario.funcao }}">
+                                    <input type="hidden" name="ativo" value="on">
+                                    <button type="submit" 
+                                            class="text-emerald-500 hover:text-emerald-400 transition-colors">
+                                        ✅ Ativar
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleSenha() {
+    const funcao = document.getElementById('funcao').value;
+    const senhaContainer = document.getElementById('senha-container');
+    const senhaInput = document.getElementById('senha');
+    
+    if (funcao === 'Gerente') {
+        senhaContainer.classList.remove('hidden');
+        senhaInput.required = true;
+    } else {
+        senhaContainer.classList.add('hidden');
+        senhaInput.required = false;
+        senhaInput.value = '';
+    }
+}
+
+function editarUsuario(id, nome, funcao, ativo) {
+    document.getElementById('form-title').textContent = 'Editar Usuário';
+    document.getElementById('usuario_id').value = id;
+    document.getElementById('nome').value = nome;
+    document.getElementById('funcao').value = funcao;
+    document.getElementById('ativo').checked = ativo === 1;
+    
+    toggleSenha();
+    
+    // Scroll para o formulário
+    document.getElementById('form-usuario').scrollIntoView({ behavior: 'smooth' });
+}
+
+function limparForm() {
+    document.getElementById('form-title').textContent = 'Novo Usuário';
+    document.getElementById('form-usuario').reset();
+    document.getElementById('usuario_id').value = '';
+    document.getElementById('senha-container').classList.add('hidden');
+    document.getElementById('ativo').checked = true;
+}
+</script>
+{% endblock %}
+

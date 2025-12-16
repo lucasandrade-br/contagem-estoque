@@ -5,7 +5,8 @@ import webbrowser
 import time
 from datetime import datetime
 from threading import Timer
-from app import app  # Importa seu aplicativo Flask
+from app import create_app  # Importa a factory
+from config import Config
 
 def fazer_backup():
     """Cria uma cópia de segurança do banco de dados antes de iniciar."""
@@ -27,10 +28,12 @@ def fazer_backup():
         shutil.copy2(db_file, backup_file)
         print(f"✅ Backup realizado com sucesso: {backup_file}")
         
-        # Limpeza: Mantém apenas os últimos 30 backups para não lotar o disco
+        # Limpeza: Mantém apenas os últimos 5 backups para não lotar o disco
         backups = sorted(os.listdir(backup_dir))
-        while len(backups) > 30:
-            os.remove(os.path.join(backup_dir, backups.pop(0)))
+        while len(backups) > 5:
+            arquivo_removido = os.path.join(backup_dir, backups.pop(0))
+            os.remove(arquivo_removido)
+            print(f"🗑️  Backup antigo removido: {os.path.basename(arquivo_removido)}")
             
     except Exception as e:
         print(f"❌ Erro ao fazer backup: {e}")
@@ -54,7 +57,7 @@ def abrir_navegador(url):
 
 if __name__ == "__main__":
     print("="*50)
-    print("🥐 SISTEMA DE CONTAGEM DE ESTOQUE - INICIANDO")
+    print("🥐 SISTEMA DE ESTOQUE - INICIANDO")
     print("="*50)
 
     # 1. Executa Backup
@@ -72,8 +75,11 @@ if __name__ == "__main__":
     print("*"*50 + "\n")
 
     # 3. Abre o navegador do computador automaticamente
-    Timer(1.5, abrir_navegador, args=[f"http://localhost:{port}"]).start()
+    Timer(1.5, abrir_navegador, args=[f"http://localhost:{port}/login_admin"]).start()
 
-    # 4. Inicia o Servidor (Host 0.0.0.0 permite acesso externo)
+    # 4. Cria a aplicação Flask
+    app = create_app(Config)
+    
+    # 5. Inicia o Servidor (Host 0.0.0.0 permite acesso externo)
     # A opção debug=False é mais segura para produção e evita reload duplo
     app.run(host='0.0.0.0', port=port, debug=False)

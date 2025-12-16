@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block title %}Estoque Atual - Posições e Valores{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-white mb-2">📊 Estoque Atual</h1>
+                <p class="text-gray-400">Análise de posições e valores em estoque</p>
+            </div>
+            <a href="{{ url_for('admin.dashboard') }}" 
+               class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg transition">
+                ← Voltar
+            </a>
+        </div>
+
+        <!-- Cards de Estatísticas -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-gradient-to-br from-blue-500/10 to-blue-600/10 border border-blue-500/30 rounded-lg p-4">
+                <div class="text-blue-400 text-sm font-semibold mb-1">💰 VALOR TOTAL</div>
+                <div class="text-3xl font-bold text-white">R$ {{ stats.valor_total|default(0)|round(2) }}</div>
+                <div class="text-xs text-gray-400 mt-1">Imobilizado em estoque</div>
+            </div>
+            
+            <div class="bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 border border-emerald-500/30 rounded-lg p-4">
+                <div class="text-emerald-400 text-sm font-semibold mb-1">✅ PRODUTOS OK</div>
+                <div class="text-3xl font-bold text-white">{{ stats.produtos_ok|default(0) }}</div>
+                <div class="text-xs text-gray-400 mt-1">Com estoque adequado</div>
+            </div>
+            
+            <div class="bg-gradient-to-br from-amber-500/10 to-amber-600/10 border border-amber-500/30 rounded-lg p-4">
+                <div class="text-amber-400 text-sm font-semibold mb-1">⚠️ ESTOQUE BAIXO</div>
+                <div class="text-3xl font-bold text-white">{{ stats.produtos_baixos|default(0) }}</div>
+                <div class="text-xs text-gray-400 mt-1">Necessitam reposição</div>
+            </div>
+            
+            <div class="bg-gradient-to-br from-red-500/10 to-red-600/10 border border-red-500/30 rounded-lg p-4">
+                <div class="text-red-400 text-sm font-semibold mb-1">🚨 ZERADOS</div>
+                <div class="text-3xl font-bold text-white">{{ stats.produtos_zerados|default(0) }}</div>
+                <div class="text-xs text-gray-400 mt-1">Sem estoque</div>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-4 mb-6">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-bold text-white">🔍 Filtros</h3>
+                {% if filtros.busca or filtros.status or filtros.categoria_inv or filtros.curva_abc %}
+                <span class="bg-blue-500/20 text-blue-400 px-3 py-1 rounded text-xs font-semibold">
+                    ✓ Filtros Ativos
+                </span>
+                {% endif %}
+            </div>
+            
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Busca</label>
+                    <input type="text" name="busca" value="{{ filtros.busca }}"
+                           placeholder="Nome, ERP ou GTIN..."
+                           class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Status</label>
+                    <select name="status" class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                        <option value="">Todos</option>
+                        <option value="zerado" {% if filtros.status == 'zerado' %}selected{% endif %}>🚨 Zerado</option>
+                        <option value="baixo" {% if filtros.status == 'baixo' %}selected{% endif %}>⚠️ Baixo (&lt; 10)</option>
+                        <option value="ok" {% if filtros.status == 'ok' %}selected{% endif %}>✅ OK (≥ 10)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Categoria Inventário</label>
+                    <select name="categoria_inv" class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                        <option value="">Todas</option>
+                        {% for cat in categorias %}
+                        <option value="{{ cat.id }}" {% if filtros.categoria_inv == cat.id|string %}selected{% endif %}>
+                            {{ cat.nome }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Curva ABC</label>
+                    <select name="curva_abc" class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                        <option value="">Todas</option>
+                        <option value="A" {% if filtros.curva_abc == 'A' %}selected{% endif %}>🔴 Curva A</option>
+                        <option value="B" {% if filtros.curva_abc == 'B' %}selected{% endif %}>🟡 Curva B</option>
+                        <option value="C" {% if filtros.curva_abc == 'C' %}selected{% endif %}>🟢 Curva C</option>
+                    </select>
+                </div>
+
+                <div class="md:col-span-5 flex gap-2">
+                    <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded transition">
+                        🔍 Filtrar
+                    </button>
+                    <a href="{{ url_for('admin.estoque_atual') }}" 
+                       class="bg-slate-600 hover:bg-slate-500 text-white px-6 py-2 rounded transition">
+                        🔄 Limpar
+                    </a>
+                    <div class="flex-1"></div>
+                    <select id="ordenacao" onchange="aplicarOrdenacao()" class="bg-slate-700 text-white border border-slate-600 rounded px-4 py-2">
+                        <option value="nome" {% if filtros.ordenacao == 'nome' %}selected{% endif %}>📝 Nome (A-Z)</option>
+                        <option value="quantidade" {% if filtros.ordenacao == 'quantidade' %}selected{% endif %}>📊 Quantidade (Maior)</option>
+                        <option value="valor_total" {% if filtros.ordenacao == 'valor_total' %}selected{% endif %}>💰 Valor Total (Maior)</option>
+                        <option value="ultima_mov" {% if filtros.ordenacao == 'ultima_mov' %}selected{% endif %}>📅 Última Movimentação</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+
+        <!-- Tabela de Estoque -->
+        <div class="bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-700/50">
+                        <tr class="text-left text-gray-300 font-semibold">
+                            <th class="p-3">Status</th>
+                            <th class="p-3">Produto</th>
+                            <th class="p-3 text-center">Und</th>
+                            <th class="p-3 text-right">Qtd. Estoque</th>
+                            <th class="p-3 text-right">Preço Unit.</th>
+                            <th class="p-3 text-right">Valor Total</th>
+                            <th class="p-3 text-center">Curva</th>
+                            <th class="p-3">Última Mov.</th>
+                            <th class="p-3 text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-gray-300">
+                        {% if produtos %}
+                            {% for p in produtos %}
+                            <tr class="border-t border-slate-700 hover:bg-slate-700/30 transition">
+                                <td class="p-3">
+                                    {% if p.estoque_atual <= 0 %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30">
+                                        🚨 Zerado
+                                    </span>
+                                    {% elif p.estoque_atual < 10 %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                        ⚠️ Baixo
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                        ✅ OK
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3">
+                                    <a href="{{ url_for('admin.produto_kardex', produto_id=p.id) }}"
+                                       class="text-blue-400 hover:text-blue-300 font-semibold">
+                                        {{ p.nome }}
+                                    </a>
+                                    {% if p.id_erp %}
+                                    <div class="text-xs text-gray-500">ID: {{ p.id_erp }}</div>
+                                    {% endif %}
+                                    {% if p.gtin %}
+                                    <div class="text-xs text-gray-500">GTIN: {{ p.gtin }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3 text-center">
+                                    <span class="bg-slate-700 px-2 py-1 rounded text-xs font-mono">
+                                        {{ p.unidade_padrao }}
+                                    </span>
+                                </td>
+                                <td class="p-3 text-right">
+                                    <span class="font-mono font-bold text-lg {% if p.estoque_atual <= 0 %}text-red-400{% elif p.estoque_atual < 10 %}text-amber-400{% else %}text-emerald-400{% endif %}">
+                                        {{ p.estoque_atual|round(2) }}
+                                    </span>
+                                </td>
+                                <td class="p-3 text-right font-mono text-sm text-gray-300">
+                                    R$ {{ p.preco_custo|default(0)|round(2) }}
+                                </td>
+                                <td class="p-3 text-right">
+                                    <span class="font-mono font-bold text-lg text-blue-400">
+                                        R$ {{ p.valor_total|round(2) }}
+                                    </span>
+                                </td>
+                                <td class="p-3 text-center">
+                                    {% if p.curva_abc == 'A' %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-red-500/20 text-red-400">
+                                        🔴 A
+                                    </span>
+                                    {% elif p.curva_abc == 'B' %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-amber-500/20 text-amber-400">
+                                        🟡 B
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400">
+                                        🟢 C
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3">
+                                    {% if p.ultima_movimentacao %}
+                                    <div class="text-xs">
+                                        {% if p.tipo_ultima_mov == 'ENTRADA' %}
+                                        <span class="text-emerald-400 font-semibold">📈 Entrada</span>
+                                        {% else %}
+                                        <span class="text-red-400 font-semibold">📉 Saída</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-xs text-gray-500">{{ p.ultima_movimentacao[:10] }}</div>
+                                    {% else %}
+                                    <span class="text-gray-500 text-xs">Sem movimentação</span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3 text-center">
+                                    <a href="{{ url_for('admin.produto_kardex', produto_id=p.id) }}"
+                                       class="inline-block bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 px-3 py-1 rounded text-xs font-bold transition border border-blue-500/30">
+                                        📋 Kardex
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="p-8 text-center text-gray-400">
+                                {% if filtros.busca or filtros.status or filtros.categoria_inv or filtros.curva_abc %}
+                                Nenhum produto encontrado com os filtros aplicados.
+                                {% else %}
+                                Nenhum produto cadastrado no sistema.
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Paginação -->
+        {% if total_paginas > 1 %}
+        <div class="flex justify-center gap-2 mt-6">
+            {% if pagina_atual > 1 %}
+            <a href="{{ url_for('admin.estoque_atual', page=pagina_atual-1, busca=filtros.busca, status=filtros.status, categoria_inv=filtros.categoria_inv, curva_abc=filtros.curva_abc, ordenacao=filtros.ordenacao) }}"
+               class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded transition">
+                ← Anterior
+            </a>
+            {% endif %}
+            
+            <span class="bg-slate-800 text-white px-4 py-2 rounded border border-slate-600">
+                Página {{ pagina_atual }} de {{ total_paginas }}
+            </span>
+            
+            {% if pagina_atual < total_paginas %}
+            <a href="{{ url_for('admin.estoque_atual', page=pagina_atual+1, busca=filtros.busca, status=filtros.status, categoria_inv=filtros.categoria_inv, curva_abc=filtros.curva_abc, ordenacao=filtros.ordenacao) }}"
+               class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded transition">
+                Próxima →
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Rodapé com Total Geral -->
+        <div class="mt-6 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border-2 border-blue-500/30 rounded-lg p-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <div class="text-sm text-gray-400 mb-1">VALOR TOTAL IMOBILIZADO EM ESTOQUE</div>
+                    <div class="text-4xl font-bold text-blue-400">R$ {{ stats.valor_total|default(0)|round(2) }}</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-gray-400 mb-1">PRODUTOS NO SISTEMA</div>
+                    <div class="text-2xl font-bold text-white">{{ stats.total_produtos|default(0) }} itens</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function aplicarOrdenacao() {
+    const select = document.getElementById('ordenacao');
+    const ordenacao = select.value;
+    
+    // Pega os parâmetros atuais da URL
+    const url = new URL(window.location);
+    url.searchParams.set('ordenacao', ordenacao);
+    url.searchParams.set('page', '1'); // Volta para página 1 ao mudar ordenação
+    
+    window.location.href = url.toString();
+}
+</script>
+{% endblock %}

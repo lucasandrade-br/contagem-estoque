@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <div class="flex items-center gap-4">
+            <a href="{{ url_for('admin.admin_categorias') }}" 
+               class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg transition flex items-center gap-2">
+                <span>←</span> Voltar
+            </a>
+            <div>
+                <h1 class="text-3xl font-bold text-gray-100">📦 {{ categoria.nome }}</h1>
+                {% if categoria.descricao %}
+                <p class="text-gray-400 mt-1">{{ categoria.descricao }}</p>
+                {% endif %}
+            </div>
+        </div>
+        <button onclick="abrirModalAdicionar()" 
+                class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-bold transition shadow-lg">
+            <span class="text-xl mr-2">➕</span> Adicionar Produtos
+        </button>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-4 p-4 rounded-lg {% if category == 'error' %}bg-red-900/20 border border-red-500 text-red-200{% else %}bg-emerald-900/20 border border-emerald-500 text-emerald-200{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="p-6 bg-emerald-900/20 border-b border-emerald-700">
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <span>✅</span> Produtos Associados ({{ produtos_associados|length }})
+            </h2>
+        </div>
+
+        {% if produtos_associados %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-slate-900/50">
+                    <tr>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Código ERP</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">GTIN</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Nome</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Categoria</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Unidade</th>
+                        <th class="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700">
+                    {% for p in produtos_associados %}
+                    <tr class="hover:bg-slate-700/30 transition">
+                        <td class="px-6 py-4 text-gray-400 text-sm">{{ p.id_erp or '-' }}</td>
+                        <td class="px-6 py-4 text-gray-400 text-sm">{{ p.gtin or '-' }}</td>
+                        <td class="px-6 py-4"><strong class="text-white">{{ p.nome }}</strong></td>
+                        <td class="px-6 py-4 text-gray-400 text-sm">{{ p.categoria_produto or '-' }}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 bg-slate-700 text-slate-300 text-xs rounded-full">{{ p.unidade_padrao }}</span>
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <button onclick="removerProduto({{ p.id }}, '{{ p.nome }}')"
+                                    class="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white px-4 py-2 rounded-lg text-sm transition"
+                                    title="Remover da categoria">
+                                ❌ Remover
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-12 text-center text-gray-500">
+            <div class="text-6xl mb-4">📦</div>
+            <p class="text-lg mb-2">Nenhum produto associado a esta categoria</p>
+            <p class="text-sm">Clique em "Adicionar Produtos" para começar</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal Adicionar Produtos -->
+<div id="modalAdicionar" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+    <div class="bg-slate-800 rounded-2xl p-8 max-w-4xl w-full shadow-2xl my-8 border border-slate-700">
+        <h3 class="text-2xl font-bold text-white mb-6">Adicionar Produtos à Categoria</h3>
+        
+        <form method="POST" action="{{ url_for('admin.categoria_produtos', categoria_id=categoria.id) }}">
+            <input type="hidden" name="action" value="add_multiple">
+            
+            <div class="mb-6">
+                <label class="block text-sm font-bold text-gray-300 mb-2">Buscar Produtos Disponíveis</label>
+                <input type="text" 
+                       class="w-full p-3 bg-slate-700 text-gray-100 border-2 border-slate-600 rounded-lg focus:border-emerald-500 focus:outline-none placeholder-gray-400" 
+                       id="buscaProduto" 
+                       placeholder="Digite para filtrar por nome, código ERP ou GTIN..." 
+                       onkeyup="filtrarProdutos()">
+            </div>
+
+            {% if produtos_disponiveis %}
+            <div class="mb-4 p-4 bg-slate-700/50 rounded-lg border border-slate-600">
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" class="mr-3 w-5 h-5" id="selecionarTodos" onchange="selecionarTodosProdutos()">
+                    <span class="font-bold text-white">Selecionar todos os produtos visíveis</span>
+                </label>
+            </div>
+
+            <div class="max-h-96 overflow-y-auto border-2 border-slate-700 rounded-lg p-4 mb-6 bg-slate-900/30">
+                {% for p in produtos_disponiveis %}
+                <div class="produto-item border-b border-slate-700 last:border-b-0 py-3" 
+                     data-nome="{{ p.nome|lower }}" 
+                     data-erp="{{ p.id_erp|lower if p.id_erp else '' }}"
+                     data-gtin="{{ p.gtin|lower if p.gtin else '' }}">
+                    <label class="flex items-start cursor-pointer hover:bg-slate-700/50 p-2 rounded transition">
+                        <input class="produto-checkbox mt-1 mr-3 w-5 h-5" type="checkbox" 
+                               name="produtos_ids[]" value="{{ p.id }}" id="prod{{ p.id }}">
+                        <div class="flex-1">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <strong class="text-white">{{ p.nome }}</strong>
+                                    <div class="text-sm text-gray-400 mt-1">
+                                        {% if p.id_erp %}<span class="mr-3">ERP: {{ p.id_erp }}</span>{% endif %}
+                                        {% if p.gtin %}<span class="mr-3">GTIN: {{ p.gtin }}</span>{% endif %}
+                                        <span>{{ p.categoria_produto or 'Sem categoria' }}</span>
+                                    </div>
+                                </div>
+                                <span class="px-2 py-1 bg-slate-600 text-gray-200 text-xs rounded-full">{{ p.unidade_padrao }}</span>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="p-12 text-center text-gray-400">
+                <div class="text-4xl mb-2">✅</div>
+                <p>Todos os produtos ativos já estão associados a esta categoria</p>
+            </div>
+            {% endif %}
+            
+            <div class="flex gap-3">
+                <button type="button" onclick="fecharModalAdicionar()" 
+                        class="flex-1 bg-slate-700 text-white font-bold py-3 rounded-xl hover:bg-slate-600 transition">
+                    Cancelar
+                </button>
+                {% if produtos_disponiveis %}
+                <button type="submit" 
+                        class="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition shadow-lg">
+                    ➕ Adicionar Selecionados
+                </button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Form oculto para remover produto -->
+<form id="formRemover" method="POST" action="{{ url_for('admin.categoria_produtos', categoria_id=categoria.id) }}" style="display: none;">
+    <input type="hidden" name="action" value="remove">
+    <input type="hidden" name="produto_id" id="removerProdutoId">
+</form>
+
+<script>
+function abrirModalAdicionar() {
+    document.getElementById('modalAdicionar').classList.remove('hidden');
+}
+
+function fecharModalAdicionar() {
+    document.getElementById('modalAdicionar').classList.add('hidden');
+    document.getElementById('buscaProduto').value = '';
+    document.getElementById('selecionarTodos').checked = false;
+    filtrarProdutos();
+}
+
+function removerProduto(produtoId, nome) {
+    if (confirm(`Remover "${nome}" desta categoria?\n\nO produto não será excluído, apenas desvinculado.`)) {
+        document.getElementById('removerProdutoId').value = produtoId;
+        document.getElementById('formRemover').submit();
+    }
+}
+
+function filtrarProdutos() {
+    const busca = document.getElementById('buscaProduto').value.toLowerCase();
+    const itens = document.querySelectorAll('.produto-item');
+    
+    itens.forEach(item => {
+        const nome = item.dataset.nome;
+        const erp = item.dataset.erp;
+        const gtin = item.dataset.gtin;
+        
+        if (nome.includes(busca) || erp.includes(busca) || gtin.includes(busca)) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+function selecionarTodosProdutos() {
+    const selecionarTodos = document.getElementById('selecionarTodos').checked;
+    const itensVisiveis = document.querySelectorAll('.produto-item');
+    
+    itensVisiveis.forEach(item => {
+        if (item.style.display !== 'none') {
+            const checkbox = item.querySelector('.produto-checkbox');
+            checkbox.checked = selecionarTodos;
+        }
+    });
+}
+</script>
+{% endblock %}

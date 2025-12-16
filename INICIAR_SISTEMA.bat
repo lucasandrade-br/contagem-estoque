@@ -15,9 +15,6 @@ if %errorlevel% neq 0 (
     exit
 )
 
-:: Instala dependencias caso seja a primeira vez (opcional, remove lentidao se ja tiver)
-:: pip install -r requirements.txt
-
 :: Inicia o Launcher Python
 python launcher.py
 

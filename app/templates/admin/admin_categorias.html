@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-100">📂 Categorias de Inventário</h1>
+            <p class="text-gray-400 mt-1">Gerencie categorias para contagens parciais</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="{{ url_for('admin.dashboard') }}" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-bold transition flex items-center gap-2">
+                ← Voltar ao Dashboard
+            </a>
+            <button onclick="abrirModalCategoria()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-bold transition shadow-lg">
+                <span class="text-xl mr-2">➕</span> Nova Categoria
+            </button>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-4 p-4 rounded-lg {% if category == 'error' %}bg-red-900/20 border border-red-500 text-red-200{% else %}bg-emerald-900/20 border border-emerald-500 text-emerald-200{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="p-6 bg-slate-900/50 border-b border-slate-700">
+            <p class="text-gray-400 text-sm">
+                <span class="text-amber-400">💡</span> 
+                As categorias permitem realizar contagens parciais (ex: "Controle Diário", "Curva A", "Perecíveis"). 
+                Um produto pode pertencer a múltiplas categorias simultaneamente.
+            </p>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-slate-900/50">
+                    <tr>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Nome</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Descrição</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Total de Produtos</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Data Criação</th>
+                        <th class="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700">
+                    {% for cat in categorias %}
+                    <tr class="hover:bg-slate-700/30 transition">
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-2">
+                                <strong class="text-white">{{ cat.nome }}</strong>
+                                {% if cat.nome == 'GERAL' %}
+                                    <span class="px-2 py-1 bg-slate-700 text-slate-300 text-xs rounded-full">Padrão</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 text-gray-400 text-sm">{{ cat.descricao or '-' }}</td>
+                        <td class="px-6 py-4">
+                            <a href="{{ url_for('admin.categoria_produtos', categoria_id=cat.id) }}" class="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 transition">
+                                <span class="px-3 py-1 bg-amber-500/20 rounded-full text-sm font-bold">{{ cat.total_produtos }}</span>
+                                produtos
+                            </a>
+                        </td>
+                        <td class="px-6 py-4 text-gray-400 text-sm">{{ cat.data_criacao[:10] if cat.data_criacao else '-' }}</td>
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <a href="{{ url_for('admin.categoria_produtos', categoria_id=cat.id) }}" 
+                                   class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-bold transition"
+                                   title="Gerenciar Produtos">
+                                    📦 Produtos
+                                </a>
+                                
+                                {% if cat.nome != 'GERAL' %}
+                                <button onclick="editarCategoria({{ cat.id }}, '{{ cat.nome }}', '{{ cat.descricao or '' }}')"
+                                        class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm transition"
+                                        title="Editar">
+                                    ✏️
+                                </button>
+                                
+                                <button onclick="excluirCategoria({{ cat.id }}, '{{ cat.nome }}')"
+                                        class="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white px-3 py-2 rounded-lg text-sm transition"
+                                        title="Excluir">
+                                    🗑️
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                            <div class="text-4xl mb-2">📂</div>
+                            Nenhuma categoria cadastrada
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Criar/Editar Categoria -->
+<div id="modalCategoria" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-slate-800 rounded-2xl p-8 max-w-md w-full shadow-2xl transform transition-all scale-100 border border-slate-700">
+        <h3 class="text-2xl font-bold text-white mb-6" id="modalTitulo">Nova Categoria</h3>
+        
+        <form method="POST" action="{{ url_for('admin.admin_categorias') }}">
+            <input type="hidden" name="action" value="save">
+            <input type="hidden" name="categoria_id" id="categoriaId">
+            
+            <div class="mb-4">
+                <label for="nome" class="block text-sm font-bold text-gray-300 mb-2">Nome da Categoria *</label>
+                <input type="text" class="w-full p-3 bg-slate-700 text-gray-100 border-2 border-slate-600 rounded-lg focus:border-emerald-500 focus:outline-none placeholder-gray-400" 
+                       id="nome" name="nome" 
+                       placeholder="Ex: Controle Diário, Curva A, Perecíveis..." required>
+                <small class="text-gray-400 text-xs">Nome único e descritivo</small>
+            </div>
+            
+            <div class="mb-6">
+                <label for="descricao" class="block text-sm font-bold text-gray-300 mb-2">Descrição</label>
+                <textarea class="w-full p-3 bg-slate-700 text-gray-100 border-2 border-slate-600 rounded-lg focus:border-emerald-500 focus:outline-none placeholder-gray-400" 
+                          id="descricao" name="descricao" rows="3"
+                          placeholder="Descreva o propósito desta categoria..."></textarea>
+            </div>
+            
+            <div class="flex gap-3">
+                <button type="button" onclick="fecharModalCategoria()" 
+                        class="flex-1 bg-slate-700 text-white font-bold py-3 rounded-xl hover:bg-slate-600 transition">
+                    Cancelar
+                </button>
+                <button type="submit" 
+                        class="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition shadow-lg">
+                    Salvar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Form oculto para exclusão -->
+<form id="formExcluir" method="POST" action="{{ url_for('admin.admin_categorias') }}" style="display: none;">
+    <input type="hidden" name="action" value="delete">
+    <input type="hidden" name="categoria_id" id="excluirCategoriaId">
+</form>
+
+<script>
+function abrirModalCategoria() {
+    document.getElementById('modalCategoria').classList.remove('hidden');
+}
+
+function fecharModalCategoria() {
+    document.getElementById('modalCategoria').classList.add('hidden');
+    document.getElementById('modalTitulo').textContent = 'Nova Categoria';
+    document.getElementById('categoriaId').value = '';
+    document.getElementById('nome').value = '';
+    document.getElementById('descricao').value = '';
+}
+
+function editarCategoria(id, nome, descricao) {
+    document.getElementById('modalTitulo').textContent = 'Editar Categoria';
+    document.getElementById('categoriaId').value = id;
+    document.getElementById('nome').value = nome;
+    document.getElementById('descricao').value = descricao;
+    abrirModalCategoria();
+}
+
+function excluirCategoria(id, nome) {
+    if (confirm(`Deseja realmente excluir a categoria "${nome}"?\n\nOs produtos associados não serão excluídos, apenas a associação.`)) {
+        document.getElementById('excluirCategoriaId').value = id;
+        document.getElementById('formExcluir').submit();
+    }
+}
+</script>
+{% endblock %}

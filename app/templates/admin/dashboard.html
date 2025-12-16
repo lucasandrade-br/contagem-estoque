@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+
+    <div class="flex justify-between items-end mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-100">Painel de Controle</h1>
+            <p class="text-gray-400 mt-1">Visão geral da operação e sincronia de dados.</p>
+        </div>
+        
+        <button onclick="abrirModalQRCode()" class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg transition text-sm font-medium border border-slate-600">
+            <span class="text-lg">📱</span> Conectar Tablets
+        </button>
+    </div>
+
+    {% if inventario_aberto %}
+    <a href="{{ url_for('admin.monitoramento') }}" class="block mb-8 group animate-fade-in">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 shadow-lg group-hover:border-amber-500/50 transition relative overflow-hidden">
+                <div class="absolute right-0 top-0 p-4 opacity-10">
+                    <span class="text-9xl">💰</span>
+                </div>
+                <h3 class="text-gray-400 font-medium text-sm uppercase tracking-wider">Valor Contado (Custo)</h3>
+                <div class="mt-2 flex items-baseline gap-2">
+                    <span class="text-4xl font-bold text-emerald-400">R$ {{ kpis.valor_total_estoque | reais }}</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Clique para ver detalhes financeiros</p>
+            </div>
+
+            <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 shadow-lg group-hover:border-amber-500/50 transition relative overflow-hidden">
+                <div class="absolute right-0 top-0 p-4 opacity-10">
+                    <span class="text-9xl">📊</span>
+                </div>
+                <h3 class="text-gray-400 font-medium text-sm uppercase tracking-wider">Progresso Geral</h3>
+                <div class="mt-4">
+                    <div class="flex justify-between mb-2">
+                        <span class="text-2xl font-bold text-white">{{ kpis.percentual }}%</span>
+                        <span class="text-sm text-gray-400 self-end">{{ kpis.locais_concluidos }}/{{ kpis.total_locais }} Locais</span>
+                    </div>
+                    <div class="w-full bg-slate-700 rounded-full h-3">
+                        <div class="bg-amber-500 h-3 rounded-full transition-all duration-1000" style="width: {{ kpis.percentual }}%"></div>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-3">Clique para ver o War Room</p>
+            </div>
+        </div>
+    </a>
+    {% endif %}
+
+    <!-- Alerta de Ocorrências Pendentes -->
+    {% if ocorrencias_pendentes > 0 %}
+    <div class="mb-8 bg-gradient-to-r from-amber-900 to-orange-900 border-l-4 border-amber-400 rounded-lg p-6 shadow-lg animate-pulse">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <span class="text-4xl">⚠️</span>
+                <div>
+                    <h3 class="text-xl font-bold text-amber-200 mb-1">Ação Necessária: Ocorrências Pendentes</h3>
+                    <p class="text-amber-100">{{ ocorrencias_pendentes }} item{% if ocorrencias_pendentes > 1 %}ns{% endif %} não identificado{% if ocorrencias_pendentes > 1 %}s{% endif %} aguardando resolução.</p>
+                    <p class="text-amber-300 text-sm mt-2">⚠️ Você não poderá fechar o inventário até resolver todas.</p>
+                </div>
+            </div>
+            <a href="{{ url_for('admin.admin_ocorrencias') }}" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition shadow-lg">
+                🔗 Resolver Agora
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+        <span class="w-2 h-6 bg-blue-500 rounded-full"></span> Operações
+    </h2>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+        
+        <div class="lg:col-span-2 bg-slate-800 rounded-xl border border-slate-700 p-6 flex flex-col justify-between relative overflow-hidden">
+            {% if inventario_aberto %}
+                <div class="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
+                <div class="flex justify-between items-start">
+                    <div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="inline-block w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></span>
+                            <h3 class="text-lg font-bold text-white">Inventário Aberto</h3>
+                        </div>
+                        <p class="text-gray-400 text-sm">Iniciado em: <span class="text-gray-200">{{ inventario_aberto.data_criacao }}</span></p>
+                        <p class="text-gray-500 text-xs mt-1">Estoquistas podem acessar os tablets.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <a href="{{ url_for('admin.exportar_csv') }}" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition">
+                            📥 CSV
+                        </a>
+                        <button onclick="abrirModalCancelar()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-lg flex items-center gap-2">
+                            ❌ Cancelar Sessão
+                        </button>
+                        <a href="{{ url_for('admin.preview_fechamento') }}" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-lg shadow-emerald-900/20 flex items-center gap-2">
+                            ✅ Concluir Sessão
+                        </a>
+                    </div>
+                </div>
+            {% else %}
+                <div class="absolute top-0 left-0 w-1 h-full bg-slate-600"></div>
+                <div class="flex flex-col h-full justify-center">
+                    <h3 class="text-lg font-bold text-gray-300 mb-4 flex items-center gap-2">
+                        🔒 Sistema Fechado
+                    </h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button onclick="abrirModalInventario()" class="w-full h-full bg-emerald-600 hover:bg-emerald-500 text-white p-4 rounded-lg text-left transition group">
+                            <span class="block text-2xl mb-1 group-hover:scale-110 transition origin-left">✨</span>
+                            <span class="block font-bold">Iniciar nova contagem</span>
+                            <span class="text-xs opacity-70">Reseta contagens anteriores.</span>
+                        </button>
+                        <form action="{{ url_for('admin.recuperar_ultimo_inventario') }}" method="POST">
+                            <button class="w-full h-full bg-slate-700 hover:bg-slate-600 text-white p-4 rounded-lg text-left transition group">
+                                <span class="block text-2xl mb-1 group-hover:scale-110 transition origin-left">↩️</span>
+                                <span class="block font-bold">Recuperar</span>
+                                <span class="text-xs opacity-70">Continua de onde parou.</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+    </div>
+
+    <!-- SEÇÃO: CONTROLE DE ESTOQUE -->
+    <div class="border-t border-slate-800 pt-8 mb-8">
+        <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <span class="w-2 h-6 bg-emerald-500 rounded-full"></span> 📦 Controle de Estoque
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a href="{{ url_for('admin.movimentacoes') }}" class="bg-slate-800 hover:bg-slate-700 p-6 rounded-lg border border-slate-700/50 hover:border-emerald-500 transition group">
+                <div class="flex items-center gap-4">
+                    <div class="bg-emerald-500/10 p-3 rounded-lg group-hover:scale-110 transition">
+                        <span class="text-3xl">📜</span>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-200 text-lg">Movimentações</h3>
+                        <p class="text-sm text-gray-400 mt-1">Histórico completo (Kardex global)</p>
+                    </div>
+                </div>
+            </a>
+
+            <a href="{{ url_for('admin.estoque_atual') }}" class="bg-slate-800 hover:bg-slate-700 p-6 rounded-lg border border-slate-700/50 hover:border-blue-500 transition group">
+                <div class="flex items-center gap-4">
+                    <div class="bg-blue-500/10 p-3 rounded-lg group-hover:scale-110 transition">
+                        <span class="text-3xl">📊</span>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-200 text-lg">Estoque Atual</h3>
+                        <p class="text-sm text-gray-400 mt-1">Análise operacional (quantidades + valores)</p>
+                    </div>
+                </div>
+            </a>
+
+            <a href="{{ url_for('admin.historico') }}" class="bg-slate-800 hover:bg-slate-700 p-6 rounded-lg border border-slate-700/50 hover:border-purple-500 transition group">
+                <div class="flex items-center gap-4">
+                    <div class="bg-purple-500/10 p-3 rounded-lg group-hover:scale-110 transition">
+                        <span class="text-3xl">🔍</span>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-200 text-lg">Relatórios</h3>
+                        <p class="text-sm text-gray-400 mt-1">Histórico e exportações</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- SEÇÃO: CADASTROS & CONFIGURAÇÕES -->
+    <div class="border-t border-slate-800 pt-8">
+        <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <span class="w-2 h-6 bg-amber-500 rounded-full"></span> ⚙️ Cadastros & Configurações
+        </h2>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <a href="{{ url_for('admin.admin_produtos') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
+                <span class="text-2xl group-hover:scale-110 transition">🏷️</span>
+                <div class="text-left">
+                    <span class="block font-bold text-gray-200 text-sm">Produtos</span>
+                    <span class="block text-xs text-gray-500">CRUD cadastral</span>
+                </div>
+            </a>
+
+            <a href="{{ url_for('admin.admin_categorias') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-amber-500 transition flex items-center gap-3 group">
+                <span class="text-2xl group-hover:scale-110 transition">📂</span>
+                <div class="text-left">
+                    <span class="block font-bold text-gray-200 text-sm">Categorias</span>
+                    <span class="block text-xs text-gray-500">Inventários parciais</span>
+                </div>
+            </a>
+
+            <a href="{{ url_for('admin.admin_unidades') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
+                <span class="text-2xl group-hover:scale-110 transition">📏</span>
+                <div class="text-left">
+                    <span class="block font-bold text-gray-200 text-sm">Unidades</span>
+                    <span class="block text-xs text-gray-500">KG, CX, UN...</span>
+                </div>
+            </a>
+
+            <a href="{{ url_for('admin.admin_setores') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
+                <span class="text-2xl group-hover:scale-110 transition">🏗️</span>
+                <div class="text-left">
+                    <span class="block font-bold text-gray-200 text-sm">Setores</span>
+                    <span class="block text-xs text-gray-500">Áreas físicas</span>
+                </div>
+            </a>
+
+            <a href="{{ url_for('admin.admin_locais') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
+                <span class="text-2xl group-hover:scale-110 transition">📍</span>
+                <div class="text-left">
+                    <span class="block font-bold text-gray-200 text-sm">Locais</span>
+                    <span class="block text-xs text-gray-500">Móveis e freezers</span>
+                </div>
+            </a>
+
+            <a href="{{ url_for('admin.admin_usuarios') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
+                <span class="text-2xl group-hover:scale-110 transition">👥</span>
+                <div class="text-left">
+                    <span class="block font-bold text-gray-200 text-sm">Usuários</span>
+                    <span class="block text-xs text-gray-500">Equipe</span>
+                </div>
+            </a>
+
+            <a href="{{ url_for('admin.upload_erp') }}" class="bg-slate-800 hover:bg-blue-900/20 p-4 rounded-lg border border-slate-700/50 hover:border-blue-500 transition flex items-center gap-3 group">
+                <span class="text-2xl group-hover:scale-110 transition">📥</span>
+                <div class="text-left">
+                    <span class="block font-bold text-gray-200 text-sm">Importar ERP</span>
+                    <span class="block text-xs text-gray-500">Atualizar produtos</span>
+                </div>
+            </a>
+        </div>
+    </div>
+
+</div>
+
+<div id="modalQR" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-slate-800 rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl transform transition-all scale-100 border border-slate-700">
+        <h3 class="text-2xl font-bold text-white mb-2">Conectar Tablets</h3>
+        <p class="text-gray-400 text-sm mb-6">Escaneie com a câmera do celular</p>
+        
+        <div class="bg-white p-4 rounded-xl mb-6 inline-block">
+            <img src="{{ url_for('admin.gerar_qrcode') }}" alt="QR Code" class="w-48 h-48">
+        </div>
+        
+        <p class="text-xs text-gray-300 font-mono bg-slate-700 p-2 rounded mb-6">
+            Ou acesse: <span id="url">...</span>
+        </p>
+        
+        <button onclick="fecharModalQRCode()" class="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition">
+            Fechar
+        </button>
+    </div>
+</div>
+
+<!-- Modal Abrir Inventário -->
+<div id="modalInventario" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-slate-800 rounded-2xl p-8 max-w-lg w-full shadow-2xl transform transition-all scale-100 border border-slate-700">
+        <h3 class="text-2xl font-bold text-white mb-2">Iniciar Nova Contagem</h3>
+        <p class="text-gray-400 text-sm mb-6">Escolha o tipo de inventário a ser realizado</p>
+        
+        <form action="{{ url_for('admin.abrir_inventario') }}" method="POST">
+            <div class="space-y-4">
+                <!-- Tipo de Inventário -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-300 mb-2">Tipo de Inventário</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center p-4 border-2 border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700/50 transition has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-900/30">
+                            <input type="radio" name="tipo_inventario" value="COMPLETO" class="mr-3" checked onchange="toggleCategoriaSelect()">
+                            <div>
+                                <div class="font-bold text-white">🗂️ Inventário Completo</div>
+                                <div class="text-xs text-gray-400">Contagem de todos os produtos ativos</div>
+                            </div>
+                        </label>
+                        
+                        <label class="flex items-center p-4 border-2 border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700/50 transition has-[:checked]:border-amber-500 has-[:checked]:bg-amber-900/30">
+                            <input type="radio" name="tipo_inventario" value="PARCIAL" class="mr-3" onchange="toggleCategoriaSelect()">
+                            <div>
+                                <div class="font-bold text-white">📋 Inventário Parcial</div>
+                                <div class="text-xs text-gray-400">Contagem apenas de produtos de uma categoria específica</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Seletor de Categoria (visível apenas quando PARCIAL) -->
+                <div id="divCategoria" class="hidden">
+                    <label for="id_categoria" class="block text-sm font-bold text-gray-300 mb-2">
+                        Categoria de Produtos *
+                    </label>
+                    <select name="id_categoria" id="id_categoria" class="w-full p-3 bg-slate-700 text-gray-100 border-2 border-slate-600 rounded-lg focus:border-amber-500 focus:outline-none">
+                        <option value="">Selecione uma categoria...</option>
+                        {% if categorias %}
+                            {% for cat in categorias %}
+                                {% if cat.nome != 'GERAL' %}
+                                <option value="{{ cat.id }}">
+                                    {{ cat.nome }} ({{ cat.total_produtos }} produtos)
+                                </option>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                    <p class="text-xs text-gray-400 mt-1">
+                        <a href="{{ url_for('admin.admin_categorias') }}" class="text-amber-400 hover:underline" target="_blank">
+                            Gerenciar categorias →
+                        </a>
+                    </p>
+                </div>
+            </div>
+            
+            <div class="flex gap-3 mt-6">
+                <button type="button" onclick="fecharModalInventario()" class="flex-1 bg-slate-700 text-white font-bold py-3 rounded-xl hover:bg-slate-600 transition">
+                    Cancelar
+                </button>
+                <button type="submit" class="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition shadow-lg">
+                    Iniciar Contagem
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Cancelar Inventário -->
+<div id="modalCancelar" class="fixed inset-0 bg-black/95 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-slate-800 rounded-2xl p-8 max-w-lg w-full shadow-2xl transform transition-all scale-100 border-2 border-red-500">
+        <div class="text-center mb-6">
+            <div class="text-6xl mb-4 animate-pulse">⚠️</div>
+            <h3 class="text-3xl font-bold text-red-400 mb-2">ATENÇÃO: CANCELAMENTO</h3>
+            <p class="text-gray-300 text-sm">Você está prestes a cancelar esta contagem</p>
+        </div>
+        
+        <div class="bg-red-900/30 border-2 border-red-500 rounded-lg p-4 mb-6">
+            <ul class="space-y-2 text-sm text-gray-200">
+                <li class="flex items-start gap-2">
+                    <span class="text-red-400 font-bold">❌</span>
+                    <span>Nenhuma alteração será feita no estoque</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-red-400 font-bold">❌</span>
+                    <span>Todas as contagens registradas serão descartadas</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-red-400 font-bold">❌</span>
+                    <span>Esta ação NÃO pode ser desfeita</span>
+                </li>
+            </ul>
+        </div>
+        
+        <form action="{{ url_for('admin.cancelar_inventario') }}" method="POST" onsubmit="return validarCancelamento()">
+            <div class="mb-6">
+                <label class="block text-sm font-bold text-gray-300 mb-2">
+                    Para confirmar, digite: <span class="text-red-400">CANCELAR</span>
+                </label>
+                <input 
+                    type="text" 
+                    id="confirmacaoCancelar" 
+                    class="w-full p-3 bg-slate-700 text-white text-center text-lg font-bold border-2 border-red-500 rounded-lg focus:border-red-400 focus:outline-none uppercase" 
+                    placeholder="Digite CANCELAR"
+                    autocomplete="off"
+                >
+            </div>
+            
+            <div class="flex gap-3">
+                <button type="button" onclick="fecharModalCancelar()" class="flex-1 bg-slate-700 text-white font-bold py-3 rounded-xl hover:bg-slate-600 transition">
+                    Voltar
+                </button>
+                <button type="submit" class="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition shadow-lg">
+                    CONFIRMAR CANCELAMENTO
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function abrirModalQRCode() {
+        document.getElementById('modalQR').classList.remove('hidden');
+        
+        // Buscar a URL do servidor
+        fetch('{{ url_for("admin.get_url_servidor") }}')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('url').textContent = data.url;
+            })
+            .catch(error => {
+                console.error('Erro ao obter URL:', error);
+                document.getElementById('url').textContent = 'Erro ao carregar URL';
+            });
+    }
+    function fecharModalQRCode() {
+        document.getElementById('modalQR').classList.add('hidden');
+    }
+    
+    function abrirModalInventario() {
+        document.getElementById('modalInventario').classList.remove('hidden');
+    }
+    function fecharModalInventario() {
+        document.getElementById('modalInventario').classList.add('hidden');
+    }
+    
+    function toggleCategoriaSelect() {
+        const tipoParcial = document.querySelector('input[name="tipo_inventario"][value="PARCIAL"]').checked;
+        const divCategoria = document.getElementById('divCategoria');
+        const selectCategoria = document.getElementById('id_categoria');
+        
+        if (tipoParcial) {
+            divCategoria.classList.remove('hidden');
+            selectCategoria.required = true;
+        } else {
+            divCategoria.classList.add('hidden');
+            selectCategoria.required = false;
+        }
+    }
+    
+    function abrirModalCancelar() {
+        document.getElementById('modalCancelar').classList.remove('hidden');
+        document.getElementById('confirmacaoCancelar').value = '';
+        document.getElementById('confirmacaoCancelar').focus();
+    }
+    
+    function fecharModalCancelar() {
+        document.getElementById('modalCancelar').classList.add('hidden');
+        document.getElementById('confirmacaoCancelar').value = '';
+    }
+    
+    function validarCancelamento() {
+        const texto = document.getElementById('confirmacaoCancelar').value.trim().toUpperCase();
+        if (texto !== 'CANCELAR') {
+            alert('❌ Digite exatamente "CANCELAR" para confirmar.');
+            return false;
+        }
+        return confirm('⚠️ ÚLTIMA CONFIRMAÇÃO: Tem certeza absoluta que deseja cancelar este inventário?');
+    }
+</script>
+<style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease-out;
+    }
+</style>
+{% endblock %}

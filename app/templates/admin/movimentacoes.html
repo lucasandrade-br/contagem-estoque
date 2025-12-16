@@ -1,0 +1,581 @@
+{% extends "base.html" %}
+
+{% block title %}Movimentações de Estoque - Kardex{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-white mb-2">📦 Movimentações de Estoque</h1>
+                <p class="text-gray-400">Controle de Kardex - Entradas e Saídas</p>
+            </div>
+            <a href="{{ url_for('admin.dashboard') }}" 
+               class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg transition">
+                ← Voltar
+            </a>
+        </div>
+
+        <!-- Estatísticas -->
+        {% if stats %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                <div class="text-emerald-400 text-sm font-semibold mb-1">📈 ENTRADAS</div>
+                <div class="text-2xl font-bold text-white">{{ stats.total_entradas|default(0)|round(2) }}</div>
+                <div class="text-xs text-gray-400 mt-1">R$ {{ (stats.valor_entradas|default(0))|round(2) }}</div>
+            </div>
+            <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                <div class="text-red-400 text-sm font-semibold mb-1">📉 SAÍDAS</div>
+                <div class="text-2xl font-bold text-white">{{ stats.total_saidas|default(0)|round(2) }}</div>
+                <div class="text-xs text-gray-400 mt-1">R$ {{ (stats.valor_saidas|default(0))|round(2) }}</div>
+            </div>
+            <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <div class="text-blue-400 text-sm font-semibold mb-1">🔢 INÍCIO</div>
+                <div class="text-2xl font-bold text-white">{{ stats.saldo_inicial|default(0)|round(2) }}</div>
+                <div class="text-xs text-gray-400 mt-1">R$ {{ (stats.valor_saldo_inicial|default(0))|round(2) }}</div>
+            </div>
+            <div class="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                <div class="text-purple-400 text-sm font-semibold mb-1">💰 ATUAL</div>
+                <div class="text-2xl font-bold text-white">{{ stats.saldo_atual|default(0)|round(2) }}</div>
+                <div class="text-xs text-gray-400 mt-1">R$ {{ (stats.valor_total_movimentacoes|default(0))|round(2) }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Botão Nova Movimentação -->
+        <div class="mb-6">
+            <button onclick="abrirModalNovaMovimentacao()" 
+                    class="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-6 py-3 rounded-lg transition shadow-lg">
+                ➕ Nova Movimentação
+            </button>
+        </div>
+
+        <!-- Filtros -->
+        <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-4 mb-6">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-bold text-white">🔍 Filtros</h3>
+                {% if filtros.produto_id or filtros.tipo or filtros.motivo or filtros.data_inicio or filtros.data_fim %}
+                <span class="bg-amber-500/20 text-amber-400 px-3 py-1 rounded text-xs font-semibold">
+                    ✓ Filtros Ativos
+                </span>
+                {% endif %}
+            </div>
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Produto</label>
+                    <select name="produto_id" class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                        <option value="">Todos</option>
+                        {% for p in produtos %}
+                        <option value="{{ p.id }}" {% if filtros.produto_id == p.id %}selected{% endif %}>
+                            {{ p.nome }}{% if p.id_erp %} ({{ p.id_erp }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Tipo</label>
+                    <select name="tipo" class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                        <option value="">Todos</option>
+                        <option value="ENTRADA" {% if filtros.tipo == 'ENTRADA' %}selected{% endif %}>📈 ENTRADA</option>
+                        <option value="SAIDA" {% if filtros.tipo == 'SAIDA' %}selected{% endif %}>📉 SAÍDA</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Motivo</label>
+                    <select name="motivo" class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                        <option value="">Todos</option>
+                        <option value="COMPRA" {% if filtros.motivo == 'COMPRA' %}selected{% endif %}>COMPRA</option>
+                        <option value="VENDA" {% if filtros.motivo == 'VENDA' %}selected{% endif %}>VENDA</option>
+                        <option value="QUEBRA" {% if filtros.motivo == 'QUEBRA' %}selected{% endif %}>QUEBRA</option>
+                        <option value="VENCIMENTO" {% if filtros.motivo == 'VENCIMENTO' %}selected{% endif %}>VENCIMENTO</option>
+                        <option value="AJUSTE_INVENTARIO" {% if filtros.motivo == 'AJUSTE_INVENTARIO' %}selected{% endif %}>AJUSTE INVENTARIO</option>
+                        <option value="DEVOLUCAO_CLIENTE" {% if filtros.motivo == 'DEVOLUCAO_CLIENTE' %}selected{% endif %}>DEVOLUÇÃO CLIENTE</option>
+                        <option value="TRANSFERENCIA_ENTRADA" {% if filtros.motivo == 'TRANSFERENCIA_ENTRADA' %}selected{% endif %}>TRANSFERÊNCIA ENTRADA</option>
+                        <option value="TRANSFERENCIA_SAIDA" {% if filtros.motivo == 'TRANSFERENCIA_SAIDA' %}selected{% endif %}>TRANSFERÊNCIA SAÍDA</option>
+                        <option value="PRODUCAO" {% if filtros.motivo == 'PRODUCAO' %}selected{% endif %}>PRODUÇÃO</option>
+                        <option value="CONSUMO" {% if filtros.motivo == 'CONSUMO' %}selected{% endif %}>CONSUMO</option>
+                        <option value="AMOSTRA" {% if filtros.motivo == 'AMOSTRA' %}selected{% endif %}>AMOSTRA</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Data Início</label>
+                    <input type="date" name="data_inicio" value="{{ filtros.data_inicio }}"
+                           class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Data Fim</label>
+                    <input type="date" name="data_fim" value="{{ filtros.data_fim }}"
+                           class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                </div>
+
+                <div class="md:col-span-5 flex gap-2">
+                    <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded transition">
+                        🔍 Filtrar
+                    </button>
+                    <a href="{{ url_for('admin.movimentacoes') }}" 
+                       class="bg-slate-600 hover:bg-slate-500 text-white px-6 py-2 rounded transition">
+                        🔄 Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Tabela de Movimentações -->
+        <div class="bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-700/50">
+                        <tr class="text-left text-gray-300 font-semibold">
+                            <th class="p-3">Data/Hora</th>
+                            <th class="p-3">Tipo</th>
+                            <th class="p-3">Produto</th>
+                            <th class="p-3">Motivo</th>
+                            <th class="p-3 text-right">Quantidade</th>
+                            <th class="p-3 text-right">Preço Unit.</th>
+                            <th class="p-3 text-right">Valor Total</th>
+                            <th class="p-3">Origem</th>
+                            <th class="p-3">Usuário</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-gray-300">
+                        {% if movimentacoes %}
+                            {% for mov in movimentacoes %}
+                            <tr class="border-t border-slate-700 hover:bg-slate-700/30">
+                                <td class="p-3">{{ mov.data_movimento[:19].replace('T', ' ') }}</td>
+                                <td class="p-3">
+                                    {% if mov.tipo == 'ENTRADA' %}
+                                    <span class="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded text-xs font-semibold">
+                                        📈 ENTRADA
+                                    </span>
+                                    {% else %}
+                                    <span class="bg-red-500/20 text-red-400 px-2 py-1 rounded text-xs font-semibold">
+                                        📉 SAÍDA
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3">
+                                    <a href="{{ url_for('admin.produto_kardex', produto_id=mov.produto_id) }}"
+                                       class="text-blue-400 hover:text-blue-300 font-semibold">
+                                        {{ mov.produto_nome }}
+                                    </a>
+                                    {% if mov.id_erp %}
+                                    <div class="text-xs text-gray-500">ID: {{ mov.id_erp }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3">
+                                    <span class="bg-slate-600/50 px-2 py-1 rounded text-xs">
+                                        {{ mov.motivo }}
+                                    </span>
+                                </td>
+                                <td class="p-3 text-right font-mono">
+                                    {% if mov.fator_conversao_usado and mov.fator_conversao_usado != 1.0 %}
+                                        {% if mov.tipo == 'ENTRADA' %}
+                                        <span class="text-emerald-400">+{{ mov.quantidade_original|round(2) }} {{ mov.unidade_movimentacao }}</span>
+                                        <div class="text-xs text-gray-500">({{ mov.quantidade|round(2) }} {{ mov.unidade_padrao }})</div>
+                                        {% else %}
+                                        <span class="text-red-400">-{{ mov.quantidade_original|round(2) }} {{ mov.unidade_movimentacao }}</span>
+                                        <div class="text-xs text-gray-500">({{ mov.quantidade|round(2) }} {{ mov.unidade_padrao }})</div>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if mov.tipo == 'ENTRADA' %}
+                                        <span class="text-emerald-400">+{{ mov.quantidade|round(2) }}</span>
+                                        {% else %}
+                                        <span class="text-red-400">-{{ mov.quantidade|round(2) }}</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                <td class="p-3 text-right font-mono text-sm text-gray-300">
+                                    R$ {{ mov.preco_custo_unitario|default(0)|round(2) }}
+                                </td>
+                                <td class="p-3 text-right font-mono font-bold {% if mov.tipo == 'ENTRADA' %}text-emerald-400{% else %}text-red-400{% endif %}">
+                                    R$ {{ mov.valor_total|default(0)|round(2) }}
+                                </td>
+                                <td class="p-3 text-xs text-gray-400">
+                                    {{ mov.origem or '-' }}
+                                </td>
+                                <td class="p-3">{{ mov.usuario_nome or 'Sistema' }}</td>
+                                
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                        <tr>
+                            <td colspan="10" class="p-8 text-center text-gray-400">
+                                Nenhuma movimentação encontrada.
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Paginação -->
+        {% if total_paginas > 1 %}
+        <div class="flex justify-center gap-2 mt-6">
+            {% if pagina_atual > 1 %}
+            <a href="{{ url_for('admin.movimentacoes', page=pagina_atual-1, produto_id=filtros.produto_id, tipo=filtros.tipo, motivo=filtros.motivo, data_inicio=filtros.data_inicio, data_fim=filtros.data_fim) }}"
+               class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded transition">
+                ← Anterior
+            </a>
+            {% endif %}
+            
+            <span class="bg-slate-800 text-white px-4 py-2 rounded border border-slate-600">
+                Página {{ pagina_atual }} de {{ total_paginas }}
+            </span>
+            
+            {% if pagina_atual < total_paginas %}
+            <a href="{{ url_for('admin.movimentacoes', page=pagina_atual+1, produto_id=filtros.produto_id, tipo=filtros.tipo, motivo=filtros.motivo, data_inicio=filtros.data_inicio, data_fim=filtros.data_fim) }}"
+               class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded transition">
+                Próxima →
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal Nova Movimentação -->
+<div id="modalNovaMovimentacao" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50">
+    <div class="bg-slate-800 border border-slate-600 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <h2 class="text-2xl font-bold text-white mb-4">➕ Nova Movimentação</h2>
+        
+        <form method="POST" action="{{ url_for('admin.nova_movimentacao') }}" class="space-y-4" id="formMovimentacao">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Produto *</label>
+                    <div class="relative">
+                        <input type="text" 
+                               id="inputBuscaProduto" 
+                               placeholder="Digite o nome, código de barras ou ID ERP..."
+                               autocomplete="off"
+                               class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <input type="hidden" name="produto_id" id="hiddenProdutoId" required>
+                        
+                        <!-- Lista de resultados -->
+                        <div id="resultadosBuscaProduto" 
+                             class="absolute z-10 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg max-h-64 overflow-y-auto hidden shadow-lg">
+                        </div>
+                    </div>
+                    <div id="produtoSelecionado" class="hidden mt-2 p-2 bg-slate-800 rounded border border-slate-600">
+                        <span class="text-emerald-400 font-semibold" id="nomeProdutoSelecionado"></span>
+                        <button type="button" onclick="limparSelecaoProduto()" class="ml-2 text-red-400 hover:text-red-300">✕</button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Tipo *</label>
+                    <select name="tipo" required onchange="atualizarMotivos(this.value)"
+                            class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                        <option value="">Selecione...</option>
+                        <option value="ENTRADA">📈 ENTRADA</option>
+                        <option value="SAIDA">📉 SAÍDA</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Motivo *</label>
+                    <select name="motivo" id="selectMotivo" required
+                            class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                        <option value="">Selecione o tipo primeiro...</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Unidade *</label>
+                    <select name="unidade_movimentacao" id="selectUnidade" required onchange="atualizarPreviewConversao()"
+                            class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+                        <option value="">Selecione o produto primeiro...</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Quantidade *</label>
+                    <input type="number" name="quantidade" id="inputQuantidade" step="0.01" min="0.01" required
+                           oninput="atualizarPreviewConversao()"
+                           class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2"
+                           placeholder="0.00">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-2">Preview Conversão</label>
+                    <div id="previewConversao" class="w-full bg-slate-900/50 border border-slate-600 rounded px-3 py-2 text-amber-400 font-bold text-center">
+                        -
+                    </div>
+                    <input type="hidden" name="fator_conversao" id="hiddenFator" value="1.0">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-semibold text-gray-300 mb-2">Origem</label>
+                <input type="text" name="origem" maxlength="200"
+                       class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2"
+                       placeholder="Ex: Nota Fiscal 12345, Pedido #789, etc.">
+            </div>
+
+            <div>
+                <label class="block text-sm font-semibold text-gray-300 mb-2">Observação</label>
+                <textarea name="observacao" rows="3" maxlength="500"
+                          class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2"
+                          placeholder="Informações adicionais..."></textarea>
+            </div>
+
+            <div class="flex gap-3 pt-4">
+                <button type="submit" 
+                        class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-lg transition">
+                    ✅ Registrar Movimentação
+                </button>
+                <button type="button" onclick="fecharModalNovaMovimentacao()"
+                        class="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded-lg transition">
+                    ❌ Cancelar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const motivosPorTipo = {
+    'ENTRADA': ['COMPRA', 'DEVOLUCAO_CLIENTE', 'AJUSTE_INVENTARIO', 'TRANSFERENCIA_ENTRADA', 'PRODUCAO'],
+    'SAIDA': ['VENDA', 'QUEBRA', 'VENCIMENTO', 'AJUSTE_INVENTARIO', 'TRANSFERENCIA_SAIDA', 'CONSUMO', 'AMOSTRA']
+};
+
+// Lista de produtos para busca
+const todosProdutos = {{ produtos | tojson }};
+
+let unidadesProdutoCache = {};
+let unidadePadrao = '';
+let produtoSelecionadoId = null;
+
+// Elementos DOM
+const inputBuscaProduto = document.getElementById('inputBuscaProduto');
+const resultadosBuscaProduto = document.getElementById('resultadosBuscaProduto');
+const hiddenProdutoId = document.getElementById('hiddenProdutoId');
+const produtoSelecionadoDiv = document.getElementById('produtoSelecionado');
+const nomeProdutoSelecionado = document.getElementById('nomeProdutoSelecionado');
+
+// ============================================
+// BUSCA DE PRODUTOS
+// ============================================
+
+inputBuscaProduto.addEventListener('input', function() {
+    const termo = this.value.toLowerCase().trim();
+    
+    if (termo.length === 0) {
+        resultadosBuscaProduto.classList.add('hidden');
+        return;
+    }
+    
+    const resultados = todosProdutos.filter(produto => {
+        const nome = produto.nome.toLowerCase();
+        const gtin = String(produto.gtin || '').toLowerCase();
+        const erp = String(produto.id_erp || '').toLowerCase();
+        
+        return nome.includes(termo) || gtin.includes(termo) || erp.includes(termo);
+    });
+    
+    if (resultados.length === 0) {
+        resultadosBuscaProduto.innerHTML = '<div class="p-4 text-gray-400 text-center">Nenhum produto encontrado</div>';
+        resultadosBuscaProduto.classList.remove('hidden');
+        return;
+    }
+    
+    resultadosBuscaProduto.innerHTML = resultados.map(produto => {
+        let subtitulo = '';
+        if (produto.id_erp) subtitulo += `ID: ${produto.id_erp}`;
+        if (produto.gtin) subtitulo += (subtitulo ? ' | ' : '') + `GTIN: ${produto.gtin}`;
+        
+        return `
+            <button type="button" 
+                    onclick="selecionarProduto(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}', '${produto.id_erp || ''}', '${produto.gtin || ''}')" 
+                    class="w-full text-left p-3 hover:bg-slate-600 transition-colors border-b border-slate-600 last:border-0">
+                <div class="font-semibold text-white">${produto.nome}</div>
+                ${subtitulo ? `<div class="text-xs text-gray-400 mt-1">${subtitulo}</div>` : ''}
+            </button>
+        `;
+    }).join('');
+    
+    resultadosBuscaProduto.classList.remove('hidden');
+});
+
+// Fechar busca ao clicar fora
+document.addEventListener('click', function(e) {
+    if (!inputBuscaProduto.contains(e.target) && !resultadosBuscaProduto.contains(e.target)) {
+        resultadosBuscaProduto.classList.add('hidden');
+    }
+});
+
+function selecionarProduto(id, nome, idErp, gtin) {
+    produtoSelecionadoId = id;
+    hiddenProdutoId.value = id;
+    
+    // Mostrar produto selecionado
+    let textoCompleto = nome;
+    if (idErp) textoCompleto += ` (ID: ${idErp})`;
+    if (gtin) textoCompleto += ` [GTIN: ${gtin}]`;
+    
+    nomeProdutoSelecionado.textContent = textoCompleto;
+    produtoSelecionadoDiv.classList.remove('hidden');
+    
+    // Limpar e esconder busca
+    inputBuscaProduto.value = '';
+    inputBuscaProduto.classList.add('hidden');
+    resultadosBuscaProduto.classList.add('hidden');
+    
+    // Carregar unidades do produto
+    carregarUnidadesProduto(id);
+}
+
+function limparSelecaoProduto() {
+    produtoSelecionadoId = null;
+    hiddenProdutoId.value = '';
+    produtoSelecionadoDiv.classList.add('hidden');
+    inputBuscaProduto.classList.remove('hidden');
+    inputBuscaProduto.value = '';
+    inputBuscaProduto.focus();
+    
+    // Limpar unidades
+    const selectUnidade = document.getElementById('selectUnidade');
+    selectUnidade.innerHTML = '<option value="">Selecione o produto primeiro...</option>';
+    document.getElementById('previewConversao').textContent = '-';
+}
+
+// ============================================
+// MOTIVOS POR TIPO
+// ============================================
+
+function atualizarMotivos(tipo) {
+    const select = document.getElementById('selectMotivo');
+    select.innerHTML = '<option value="">Selecione...</option>';
+    
+    if (tipo && motivosPorTipo[tipo]) {
+        motivosPorTipo[tipo].forEach(motivo => {
+            const option = document.createElement('option');
+            option.value = motivo;
+            option.textContent = motivo.replace(/_/g, ' ');
+            select.appendChild(option);
+        });
+    }
+}
+
+// ============================================
+// UNIDADES E CONVERSÃO
+// ============================================
+
+async function carregarUnidadesProduto(produtoId) {
+    const selectUnidade = document.getElementById('selectUnidade');
+    selectUnidade.innerHTML = '<option value="">Carregando...</option>';
+    
+    if (!produtoId) {
+        selectUnidade.innerHTML = '<option value="">Selecione o produto primeiro...</option>';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/produto/${produtoId}/unidades`);
+        const data = await response.json();
+        
+        if (data.error) {
+            selectUnidade.innerHTML = '<option value="">Erro ao carregar unidades</option>';
+            return;
+        }
+        
+        unidadesProdutoCache[produtoId] = data;
+        unidadePadrao = data.unidade_padrao.sigla;
+        
+        selectUnidade.innerHTML = '';
+        
+        // Adicionar unidade padrão (fator 1.0)
+        const optPadrao = document.createElement('option');
+        optPadrao.value = data.unidade_padrao.sigla;
+        optPadrao.dataset.fator = 1.0;
+        optPadrao.textContent = `${data.unidade_padrao.sigla} - ${data.unidade_padrao.nome} (Padrão)`;
+        selectUnidade.appendChild(optPadrao);
+        
+        // Adicionar unidades alternativas
+        data.unidades_alternativas.forEach(unidade => {
+            const option = document.createElement('option');
+            option.value = unidade.sigla;
+            option.dataset.fator = unidade.fator;
+            option.textContent = `${unidade.sigla} - ${unidade.nome} (1 = ${unidade.fator} ${data.unidade_padrao.sigla})`;
+            selectUnidade.appendChild(option);
+        });
+        
+        // Selecionar a primeira opção por padrão
+        selectUnidade.selectedIndex = 0;
+        atualizarPreviewConversao();
+        
+    } catch (error) {
+        console.error('Erro ao carregar unidades:', error);
+        selectUnidade.innerHTML = '<option value="">Erro ao carregar unidades</option>';
+    }
+}
+
+function atualizarPreviewConversao() {
+    const selectUnidade = document.getElementById('selectUnidade');
+    const inputQuantidade = document.getElementById('inputQuantidade');
+    const previewDiv = document.getElementById('previewConversao');
+    const hiddenFator = document.getElementById('hiddenFator');
+    
+    const selectedOption = selectUnidade.options[selectUnidade.selectedIndex];
+    const fator = parseFloat(selectedOption?.dataset.fator || 1.0);
+    const quantidade = parseFloat(inputQuantidade.value || 0);
+    const unidadeSelecionada = selectUnidade.value;
+    
+    // Atualizar campo hidden com o fator
+    hiddenFator.value = fator;
+    
+    if (quantidade > 0 && unidadeSelecionada) {
+        const quantidadeConvertida = quantidade * fator;
+        
+        if (fator === 1.0) {
+            previewDiv.textContent = `${quantidadeConvertida.toFixed(2)} ${unidadePadrao}`;
+        } else {
+            previewDiv.textContent = `${quantidade} ${unidadeSelecionada} × ${fator} = ${quantidadeConvertida.toFixed(2)} ${unidadePadrao}`;
+        }
+        previewDiv.classList.remove('text-gray-500');
+        previewDiv.classList.add('text-amber-400');
+    } else {
+        previewDiv.textContent = '-';
+        previewDiv.classList.remove('text-amber-400');
+        previewDiv.classList.add('text-gray-500');
+    }
+}
+
+// ============================================
+// MODAL
+// ============================================
+
+function abrirModalNovaMovimentacao() {
+    document.getElementById('modalNovaMovimentacao').classList.remove('hidden');
+    document.getElementById('modalNovaMovimentacao').classList.add('flex');
+    
+    // Resetar formulário
+    limparSelecaoProduto();
+    document.getElementById('formMovimentacao').reset();
+}
+
+function fecharModalNovaMovimentacao() {
+    document.getElementById('modalNovaMovimentacao').classList.add('hidden');
+    document.getElementById('modalNovaMovimentacao').classList.remove('flex');
+}
+
+// Fechar modal ao clicar fora
+document.getElementById('modalNovaMovimentacao').addEventListener('click', function(e) {
+    if (e.target === this) {
+        fecharModalNovaMovimentacao();
+    }
+});
+
+// Fechar com ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        fecharModalNovaMovimentacao();
+    }
+});
+</script>
+{% endblock %}

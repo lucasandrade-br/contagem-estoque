@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}Preview Fechamento - Revisão do Inventário{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex items-center justify-between mb-2">
+                <h1 class="text-3xl font-bold text-white">📋 Revisão Antes de Fechar</h1>
+                <a href="{{ url_for('admin.dashboard') }}" 
+                   class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg transition">
+                    ← Voltar ao Dashboard
+                </a>
+            </div>
+            <p class="text-gray-400">Revise as divergências antes de confirmar o fechamento do inventário</p>
+            
+            <!-- Info do Inventário -->
+            <div class="mt-4 bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                <div class="flex items-center gap-4">
+                    <div>
+                        <span class="text-sm text-gray-400">Tipo:</span>
+                        <span class="ml-2 font-bold text-white">
+                            {% if inventario.tipo_inventario == 'PARCIAL' %}
+                            📋 PARCIAL - {{ nome_categoria }}
+                            {% else %}
+                            🗂️ COMPLETO
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="border-l border-slate-600 pl-4">
+                        <span class="text-sm text-gray-400">Iniciado em:</span>
+                        <span class="ml-2 text-white">{{ inventario.data_criacao }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cards de Estatísticas -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+            <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <div class="text-blue-400 text-sm font-semibold mb-1">📦 PRODUTOS</div>
+                <div class="text-3xl font-bold text-white">{{ stats.total_produtos }}</div>
+            </div>
+            
+            <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                <div class="text-amber-400 text-sm font-semibold mb-1">⚠️ DIVERGÊNCIAS</div>
+                <div class="text-3xl font-bold text-white">{{ stats.total_divergencias }}</div>
+            </div>
+            
+            <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                <div class="text-emerald-400 text-sm font-semibold mb-1">📈 ENTRADAS</div>
+                <div class="text-3xl font-bold text-white">{{ stats.total_entradas }}</div>
+            </div>
+            
+            <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                <div class="text-red-400 text-sm font-semibold mb-1">📉 SAÍDAS</div>
+                <div class="text-3xl font-bold text-white">{{ stats.total_saidas }}</div>
+            </div>
+            
+            <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                <div class="text-green-400 text-sm font-semibold mb-1">✅ SEM AJUSTE</div>
+                <div class="text-3xl font-bold text-white">{{ stats.total_ok }}</div>
+            </div>
+            
+            <div class="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                <div class="text-purple-400 text-sm font-semibold mb-1">💰 VALOR AJUSTES</div>
+                <div class="text-xl font-bold text-white">R$ {{ stats.valor_total_ajustes|round(2) }}</div>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-4 mb-6">
+            <div class="flex items-center justify-between">
+                <div class="flex gap-2">
+                    <button onclick="filtrarTabela('todos')" id="btnTodos" 
+                            class="px-4 py-2 rounded bg-blue-600 text-white font-semibold transition">
+                        Todos ({{ stats.total_produtos }})
+                    </button>
+                    <button onclick="filtrarTabela('divergencias')" id="btnDivergencias"
+                            class="px-4 py-2 rounded bg-slate-700 hover:bg-amber-600 text-white transition">
+                        Divergências ({{ stats.total_divergencias }})
+                    </button>
+                    <button onclick="filtrarTabela('ok')" id="btnOk"
+                            class="px-4 py-2 rounded bg-slate-700 hover:bg-emerald-600 text-white transition">
+                        Sem Ajuste ({{ stats.total_ok }})
+                    </button>
+                    <button onclick="filtrarTabela('nao_contados')" id="btnNaoContados"
+                            class="px-4 py-2 rounded bg-slate-700 hover:bg-red-600 text-white transition">
+                        Não Contados ({{ stats.total_nao_contados }})
+                    </button>
+                </div>
+                
+                <a href="{{ url_for('admin.exportar_preview_fechamento') }}" 
+                   class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-bold transition flex items-center gap-2">
+                    📥 Exportar Excel
+                </a>
+            </div>
+        </div>
+
+        <!-- Tabela de Comparação -->
+        <div class="bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden mb-6">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-700/50 sticky top-0">
+                        <tr class="text-left text-gray-300 font-semibold">
+                            <th class="p-3">Produto</th>
+                            <th class="p-3 text-center">Und</th>
+                            <th class="p-3 text-right">Estoque Sistema</th>
+                            <th class="p-3 text-right">Qtd Contada</th>
+                            <th class="p-3 text-right">Diferença</th>
+                            <th class="p-3 text-center">Tipo Ajuste</th>
+                            <th class="p-3 text-right">Preço Unit.</th>
+                            <th class="p-3 text-right">Valor Ajuste</th>
+                            <th class="p-3 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-gray-300" id="tabelaComparacao">
+                        {% for item in comparacao %}
+                        <tr class="border-t border-slate-700 hover:bg-slate-700/30 transition row-item"
+                            data-tipo="{{ item.tipo_ajuste }}"
+                            data-contado="{{ 'sim' if item.foi_contado else 'nao' }}">
+                            <td class="p-3">
+                                <div class="font-semibold text-white">{{ item.produto_nome }}</div>
+                                {% if item.id_erp %}
+                                <div class="text-xs text-gray-500">ID: {{ item.id_erp }}</div>
+                                {% endif %}
+                                {% if item.gtin %}
+                                <div class="text-xs text-gray-500">GTIN: {{ item.gtin }}</div>
+                                {% endif %}
+                            </td>
+                            <td class="p-3 text-center">
+                                <span class="bg-slate-700 px-2 py-1 rounded text-xs font-mono">
+                                    {{ item.unidade_padrao }}
+                                </span>
+                            </td>
+                            <td class="p-3 text-right font-mono text-gray-400">
+                                {{ item.estoque_sistema|round(2) }}
+                            </td>
+                            <td class="p-3 text-right font-mono font-bold text-white">
+                                {{ item.quantidade_contada|round(2) }}
+                            </td>
+                            <td class="p-3 text-right font-mono font-bold
+                                {% if item.diferenca > 0 %}text-blue-400
+                                {% elif item.diferenca < 0 %}text-red-400
+                                {% else %}text-emerald-400{% endif %}">
+                                {% if item.diferenca > 0 %}+{% endif %}{{ item.diferenca|round(2) }}
+                            </td>
+                            <td class="p-3 text-center">
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold
+                                      bg-{{ item.cor_ajuste }}-500/20 text-{{ item.cor_ajuste }}-400 border border-{{ item.cor_ajuste }}-500/30">
+                                    {{ item.icone_ajuste }} {{ item.tipo_ajuste }}
+                                </span>
+                            </td>
+                            <td class="p-3 text-right font-mono text-sm text-gray-400">
+                                R$ {{ item.preco_custo|round(2) }}
+                            </td>
+                            <td class="p-3 text-right font-mono font-bold text-purple-400">
+                                R$ {{ item.valor_ajuste|round(2) }}
+                            </td>
+                            <td class="p-3 text-center">
+                                {% if item.foi_contado %}
+                                <span class="text-emerald-400 text-xs">✓ Contado</span>
+                                {% else %}
+                                <span class="text-red-400 text-xs font-bold">✗ NÃO Contado</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Alertas -->
+        {% if stats.total_nao_contados > 0 %}
+        <div class="bg-red-900/20 border-l-4 border-red-500 rounded-lg p-4 mb-6">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">⚠️</span>
+                <div>
+                    <h3 class="text-lg font-bold text-red-400">Atenção: Produtos Não Contados</h3>
+                    <p class="text-gray-300">
+                        {{ stats.total_nao_contados }} produto(s) não foram contados. 
+                        {% if inventario.tipo_inventario == 'COMPLETO' %}
+                        <span class="font-bold text-red-400">Eles serão ZERADOS no sistema.</span>
+                        {% else %}
+                        <span class="font-bold text-red-400">Apenas produtos da categoria "{{ nome_categoria }}" não contados serão zerados.</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Botões de Ação -->
+        <div class="bg-gradient-to-r from-slate-800 to-slate-900 border-2 border-slate-600 rounded-lg p-6">
+            <div class="flex gap-4">
+                <form action="{{ url_for('admin.confirmar_fechamento') }}" method="POST" class="flex-1"
+                      onsubmit="return confirm('⚠️ ATENÇÃO!\n\n{{ stats.total_divergencias }} divergência(s) encontrada(s).\n\nAo confirmar, os ajustes serão aplicados automaticamente e o inventário será fechado.\n\n✅ Confirmar fechamento?')">
+                    <button type="submit" 
+                            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-lg transition shadow-lg text-lg">
+                        ✅ CONFIRMAR FECHAMENTO
+                    </button>
+                </form>
+                
+                <a href="{{ url_for('admin.dashboard') }}" 
+                   class="flex-1 bg-slate-600 hover:bg-slate-500 text-white font-bold py-4 rounded-lg transition text-center text-lg">
+                    ❌ CANCELAR (Voltar ao Dashboard)
+                </a>
+            </div>
+            
+            <p class="text-center text-gray-400 text-sm mt-4">
+                Ao confirmar, {{ stats.total_entradas }} entrada(s) e {{ stats.total_saidas }} saída(s) serão registradas automaticamente no Kardex.
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+let filtroAtual = 'todos';
+
+function filtrarTabela(tipo) {
+    filtroAtual = tipo;
+    const rows = document.querySelectorAll('.row-item');
+    
+    // Atualizar botões
+    document.querySelectorAll('[id^="btn"]').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'bg-amber-600', 'bg-emerald-600', 'bg-red-600');
+        btn.classList.add('bg-slate-700');
+    });
+    
+    let btnAtivo = null;
+    let corAtiva = 'bg-blue-600';
+    
+    if (tipo === 'todos') {
+        btnAtivo = document.getElementById('btnTodos');
+        corAtiva = 'bg-blue-600';
+    } else if (tipo === 'divergencias') {
+        btnAtivo = document.getElementById('btnDivergencias');
+        corAtiva = 'bg-amber-600';
+    } else if (tipo === 'ok') {
+        btnAtivo = document.getElementById('btnOk');
+        corAtiva = 'bg-emerald-600';
+    } else if (tipo === 'nao_contados') {
+        btnAtivo = document.getElementById('btnNaoContados');
+        corAtiva = 'bg-red-600';
+    }
+    
+    if (btnAtivo) {
+        btnAtivo.classList.remove('bg-slate-700');
+        btnAtivo.classList.add(corAtiva);
+    }
+    
+    // Filtrar linhas
+    rows.forEach(row => {
+        const tipoAjuste = row.dataset.tipo;
+        const foiContado = row.dataset.contado;
+        
+        let mostrar = false;
+        
+        if (tipo === 'todos') {
+            mostrar = true;
+        } else if (tipo === 'divergencias') {
+            mostrar = tipoAjuste !== 'OK';
+        } else if (tipo === 'ok') {
+            mostrar = tipoAjuste === 'OK';
+        } else if (tipo === 'nao_contados') {
+            mostrar = foiContado === 'nao';
+        }
+        
+        if (mostrar) {
+            row.classList.remove('hidden');
+        } else {
+            row.classList.add('hidden');
+        }
+    });
+}
+</script>
+{% endblock %}

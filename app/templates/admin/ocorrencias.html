@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+
+{% block title %}Gestão de Ocorrências{% endblock %}
+
+{% block content %}
+<div class="min-h-screen p-6 bg-slate-900 text-gray-100">
+    <div class="max-w-7xl mx-auto">
+        
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-amber-500">Gestão de Ocorrências</h1>
+                <p class="text-gray-400 text-sm mt-1">Itens não identificados reportados durante o inventário.</p>
+            </div>
+            <a href="{{ url_for('admin.dashboard') }}" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-gray-200 transition">
+                ← Voltar ao Dashboard
+            </a>
+        </div>
+
+        <div class="bg-slate-800 rounded-lg shadow-xl overflow-hidden border border-slate-700">
+            {% if ocorrencias|length > 0 %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-900 text-gray-400 text-sm uppercase tracking-wider">
+                            <th class="p-4 border-b border-slate-700 w-20">Foto</th>
+                            <th class="p-4 border-b border-slate-700">O que foi reportado</th>
+                            <th class="p-4 border-b border-slate-700">Local / Data</th>
+                            <th class="p-4 border-b border-slate-700 text-center">Quantidade</th>
+                            <th class="p-4 border-b border-slate-700 text-right">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-700">
+                        {% for item in ocorrencias %}
+                        <tr class="hover:bg-slate-700/50 transition duration-150">
+                            <td class="p-4">
+                                <div class="w-12 h-12 rounded bg-slate-900 border border-slate-600 flex items-center justify-center overflow-hidden cursor-pointer"
+                                    onclick='abrirAnalise({{ item|tojson }})'>
+                                    {% if item.foto_path %}
+                                        <img src="{{ url_for('static', filename=item.foto_path) }}" class="w-full h-full object-cover">
+                                    {% else %}
+                                        <span class="text-xl">📷</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+
+                            <td class="p-4">
+                                <p class="font-bold text-gray-100 text-lg">{{ item.nome_identificado }}</p>
+                                <p class="text-xs text-amber-500 font-mono">ID Ocorrência: #{{ item.id }}</p>
+                            </td>
+
+                            <td class="p-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-slate-600 px-2 py-1 rounded text-xs font-bold">{{ item.local_nome }}</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">{{ item.data_hora }}</p>
+                            </td>
+
+                            <td class="p-4 text-center">
+                                <span class="text-xl font-bold text-emerald-400">{{ item.quantidade }}</span>
+                                <span class="text-sm text-gray-400 ml-1">{{ item.unidade_sigla }}</span>
+                            </td>
+
+                            <td class="p-4 text-right">
+                                <button onclick='abrirAnalise({{ item|tojson }})' 
+                                        class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded shadow hover:shadow-lg transition font-medium flex items-center gap-2 ml-auto">
+                                    <span>🔍</span> Analisar
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="p-10 text-center text-gray-400">
+                <p class="text-xl">🎉 Nenhuma ocorrência pendente!</p>
+                <p class="text-sm mt-2">O inventário pode ser fechado com segurança.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div id="modalAnalise" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+    <div class="bg-slate-900 rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-600 shadow-2xl overflow-hidden">
+        
+        <div class="flex justify-between items-center p-4 border-b border-slate-700 bg-slate-800">
+            <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                🔎 Analisar Ocorrência <span id="analise-id" class="text-amber-500 text-sm"></span>
+            </h3>
+            <button onclick="fecharAnalise()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-0">
+            <div class="grid grid-cols-1 md:grid-cols-2 h-full">
+                
+                <div class="bg-black flex flex-col items-center justify-center p-4 border-r border-slate-700 relative group">
+                    <img id="analise-foto" src="" class="max-h-[400px] w-auto object-contain rounded shadow-lg hidden">
+                    <div id="analise-sem-foto" class="text-gray-500 flex flex-col items-center hidden">
+                        <span class="text-6xl mb-4">📷</span>
+                        <p>Sem foto disponível</p>
+                    </div>
+                    
+                    <div class="w-full mt-6 bg-slate-800/50 p-4 rounded border border-slate-700">
+                        <label class="text-xs text-gray-400 uppercase font-bold">O Estoquista informou:</label>
+                        <p id="analise-nome" class="text-xl font-bold text-white mt-1"></p>
+                        <div class="flex justify-between mt-2">
+                            <p class="text-emerald-400 font-bold text-lg">
+                                <span id="analise-qtd"></span> <span id="analise-unidade"></span>
+                            </p>
+                            <p id="analise-local" class="text-gray-300 text-sm bg-slate-700 px-2 py-1 rounded"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 bg-slate-900 flex flex-col gap-6">
+                    
+                    <div class="space-y-4">
+                        <h4 class="text-lg font-semibold text-blue-400 border-b border-slate-700 pb-2">Opção 1: Vincular a Produto Existente</h4>
+                        <p class="text-sm text-gray-400">Se este item já existe no cadastro, mas o estoquista não encontrou.</p>
+                        
+                        <div class="relative">
+                            <input type="text" id="busca-vinculo" placeholder="Digite o nome do produto correto..." 
+                                   class="w-full bg-slate-800 border border-slate-600 rounded p-3 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <div id="lista-resultados" class="hidden absolute top-full left-0 w-full bg-slate-800 border border-slate-600 max-h-40 overflow-y-auto z-10 shadow-xl rounded-b">
+                                </div>
+                        </div>
+                        
+                        <div id="produto-selecionado" class="hidden bg-blue-900/30 border border-blue-500/50 p-3 rounded flex justify-between items-center">
+                            <div>
+                                <p class="text-blue-300 text-xs font-bold">VINCULAR A:</p>
+                                <p id="vinculo-nome" class="font-bold text-white"></p>
+                                <input type="hidden" id="vinculo-id">
+                            </div>
+                            <button onclick="confirmarVinculo()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-bold shadow-lg transform hover:scale-105 transition">
+                                Confirmar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-700 my-2"></div>
+
+                    <div>
+                        <h4 class="text-lg font-semibold text-emerald-400 mb-2">Opção 2: Cadastrar Novo</h4>
+                        <p class="text-sm text-gray-400 mb-3">Se é um produto realmente novo que chegou agora.</p>
+                        <button onclick="iniciarCadastroNovo()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold flex items-center justify-center gap-2 shadow-lg transition">
+                            <span>✨</span> Abrir Formulário de Cadastro
+                        </button>
+                    </div>
+
+                    <div class="border-t border-slate-700 my-2"></div>
+
+                    <div>
+                        <h4 class="text-lg font-semibold text-rose-400 mb-2">Opção 3: Rejeitar</h4>
+                        <p class="text-sm text-gray-400 mb-3">Se for lixo, erro ou duplicidade.</p>
+                        <button onclick="rejeitarOcorrencia()" class="w-full py-2 border border-rose-600 text-rose-500 hover:bg-rose-600 hover:text-white rounded font-bold transition">
+                            🗑️ Ignorar esta ocorrência
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<input type="hidden" id="id_ocorrencia_atual">
+
+{% include 'includes/modal_produto.html' %}
+
+<script src="{{ url_for('static', filename='js/produto_modal.js') }}"></script>
+
+<script>
+    // Dados globais para busca rápida
+    const todosProdutos = {{ produtos | tojson }}; 
+    // Certifique-se que sua rota render_template envie 'produtos=produtos'
+    // Se não estiver enviando, precisaremos fazer fetch. 
+    // Assumindo que você vai adicionar 'produtos=db.execute("SELECT * FROM produtos WHERE ativo=1").fetchall()' no app.py
+
+    // --- LÓGICA DO MODAL DE ANÁLISE ---
+
+    function abrirAnalise(item) {
+        document.getElementById('id_ocorrencia_atual').value = item.id;
+        document.getElementById('analise-id').innerText = '#' + item.id;
+        
+        // Preenche dados
+        document.getElementById('analise-nome').innerText = item.nome_identificado;
+        document.getElementById('analise-qtd').innerText = item.quantidade;
+        document.getElementById('analise-unidade').innerText = item.unidade_sigla; // Certifique-se que o SQL traz a sigla
+        document.getElementById('analise-local').innerText = item.local_nome;
+
+        // Trata Foto
+        const img = document.getElementById('analise-foto');
+        const noImg = document.getElementById('analise-sem-foto');
+        
+        if (item.foto_path) {
+            // Como salvamos relativo no banco (uploads/...), basta adicionar /static/ na frente
+            img.src = item.foto_path;
+            img.classList.remove('hidden');
+            noImg.classList.add('hidden');
+        } else {
+            img.classList.add('hidden');
+            noImg.classList.remove('hidden');
+        }
+
+        // Reseta estados
+        document.getElementById('busca-vinculo').value = '';
+        document.getElementById('lista-resultados').classList.add('hidden');
+        document.getElementById('produto-selecionado').classList.add('hidden');
+
+        document.getElementById('modalAnalise').classList.remove('hidden');
+    }
+
+    function fecharAnalise() {
+        document.getElementById('modalAnalise').classList.add('hidden');
+    }
+
+    // --- LÓGICA DE BUSCA DE VÍNCULO ---
+
+    const inputBusca = document.getElementById('busca-vinculo');
+    const listaRes = document.getElementById('lista-resultados');
+
+    inputBusca.addEventListener('input', function() {
+        const termo = this.value.toLowerCase();
+        if(termo.length < 2) {
+            listaRes.classList.add('hidden');
+            return;
+        }
+
+        // Filtra produtos (Assumindo que todosProdutos foi carregado)
+        // Se a lista for muito grande, ideal é fazer fetch API, mas para <5000 itens JS aguenta
+        const resultados = todosProdutos.filter(p => p.nome.toLowerCase().includes(termo)).slice(0, 10);
+
+        listaRes.innerHTML = '';
+        if(resultados.length === 0) {
+            listaRes.innerHTML = '<div class="p-3 text-gray-400">Nenhum produto encontrado.</div>';
+        } else {
+            resultados.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'p-3 hover:bg-slate-700 cursor-pointer border-b border-slate-700 last:border-0';
+                div.innerHTML = `<div class="font-bold text-white">${p.nome}</div>`;
+                div.onclick = () => selecionarVinculo(p);
+                listaRes.appendChild(div);
+            });
+        }
+        listaRes.classList.remove('hidden');
+    });
+
+    function selecionarVinculo(produto) {
+        document.getElementById('vinculo-id').value = produto.id;
+        document.getElementById('vinculo-nome').innerText = produto.nome;
+        document.getElementById('produto-selecionado').classList.remove('hidden');
+        listaRes.classList.add('hidden');
+        inputBusca.value = '';
+    }
+
+    // --- AÇÕES FINAIS ---
+
+    async function confirmarVinculo() {
+        const idOcorrencia = document.getElementById('id_ocorrencia_atual').value;
+        const idProduto = document.getElementById('vinculo-id').value;
+
+        if(!idProduto) return alert('Selecione um produto primeiro.');
+
+        try {
+            const res = await fetch('/api/vincular_ocorrencia', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id_ocorrencia: idOcorrencia, id_produto_destino: idProduto })
+            });
+            const data = await res.json();
+            
+            if(data.sucesso) {
+                alert('Vínculo realizado com sucesso!');
+                location.reload();
+            } else {
+                alert(data.erro || 'Erro ao vincular.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Erro de conexão.');
+        }
+    }
+
+    function iniciarCadastroNovo() {
+        const nomeAtual = document.getElementById('analise-nome').innerText;
+        const idOcorrencia = document.getElementById('id_ocorrencia_atual').value;
+
+        // Fecha análise
+        fecharAnalise();
+
+        // Abre modal de produto (reutilizado)
+        abrirModalProduto();
+        
+        // Preenche automaticamente
+        document.getElementById('prod_nome').value = nomeAtual;
+        
+        // SETA O CONTEXTO PARA O SCRIPT DO MODAL SABER QUE É OCORRÊNCIA
+        // Nota: Precisamos garantir que o modal_produto.html tenha um input hidden ou variável global
+        // Vamos criar um input hidden dinamicamente se não existir ou usar uma var global
+        window.contextoOcorrenciaId = idOcorrencia; 
+        
+        // Muda título para dar feedback
+        document.getElementById('modalTitulo').innerText = "Cadastrar a partir de Ocorrência";
+    }
+
+    async function rejeitarOcorrencia() {
+        if(!confirm('Tem certeza que deseja rejeitar esta contagem? Ela não entrará no estoque.')) return;
+        
+        const id = document.getElementById('id_ocorrencia_atual').value;
+        // Precisamos criar essa rota no backend se não existir, ou usar uma genérica
+        // Vou assumir que você criou /api/rejeitar_ocorrencia/<id>
+        try {
+            const res = await fetch(`/api/rejeitar_ocorrencia/${id}`, { method: 'POST' });
+            const data = await res.json();
+            if(data.sucesso || data.success) { // Tratando inconsistência de nomes
+                location.reload();
+            } else {
+                alert('Erro ao rejeitar.');
+            }
+        } catch (e) {
+            alert('Erro de conexão.');
+        }
+    }
+
+    // --- INTEGRAÇÃO COM O MODAL DE PRODUTO (OVERRIDE DO SUBMIT) ---
+    // Precisamos interceptar o submit do modal_produto para saber se é um cadastro normal ou de ocorrência
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('formProduto');
+        
+        // Remove listeners antigos (truque para não duplicar submit se o script rodar 2x)
+        const newForm = form.cloneNode(true);
+        form.parentNode.replaceChild(newForm, form);
+        
+        newForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            // VERIFICA SE ESTAMOS NO CONTEXTO DE OCORRÊNCIA
+            let url = '{{ url_for("admin.admin_produtos") }}'; // Rota padrão de salvar produto normal
+            
+            if (window.contextoOcorrenciaId) {
+                url = '/api/cadastrar_da_ocorrencia';
+                formData.append('id_ocorrencia', window.contextoOcorrenciaId);
+            }
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if(data.sucesso) {
+                    alert('Operação realizada!');
+                    location.reload(); // Recarrega para sumir a ocorrência da lista
+                } else {
+                    alert(data.erro || 'Erro ao salvar.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Erro de conexão.');
+            }
+        });
+    });
+
+</script>
+{% endblock %}
