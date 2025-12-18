@@ -65,11 +65,30 @@
         <!-- MODO BUSCA -->
         <div id="area-busca" class="block">
             <div class="flex gap-2 mb-2">
-                <input type="text" 
-                       id="busca-produto" 
-                       autofocus
-                       placeholder="Bipe o código ou digite o nome..." 
-                       class="flex-1 text-lg p-4 bg-slate-800 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <div class="flex-1 relative">
+                    <input type="text" 
+                           id="busca-produto" 
+                           autofocus
+                           placeholder="Bipe o código ou digite o nome..." 
+                           class="w-full text-lg p-4 pr-12 bg-slate-800 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <button type="button" 
+                            id="btn-limpar-busca"
+                            onclick="limparBusca()"
+                            title="Limpar busca"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors hidden">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <button type="button" 
+                        onclick="abrirTecladoAlfabetico()"
+                        title="Buscar por nome (teclado)"
+                        class="p-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                    </svg>
+                </button>
                 <button type="button" 
                         onclick="abrirModalOcorrencia()"
                         title="Registrar item não cadastrado"
@@ -80,7 +99,7 @@
             </div>
             
             <!-- Lista de Resultados de Busca -->
-            <div id="resultados-busca" class="mt-2 bg-slate-800 rounded-lg max-h-64 overflow-y-auto hidden">
+            <div id="resultados-busca" class="mt-2 bg-slate-800 rounded-lg max-h-64 overflow-y-auto hidden relative z-[60]">
                 <!-- Resultados aparecerão aqui via JS -->
             </div>
         </div>
@@ -127,8 +146,8 @@
     <!-- Lista de Já Contados -->
     <div class="mb-6">
         <h2 class="text-xl font-semibold text-gray-100 mb-4">Já Contados</h2>
-        <div class="bg-slate-800 rounded-lg overflow-hidden">
-            <table class="w-full">
+        <div class="bg-slate-800 rounded-lg overflow-x-auto overflow-y-auto">
+            <table class="w-full min-w-[600px]">
                 <thead class="bg-slate-700">
                     <tr>
                         <th class="text-left p-3 text-gray-300">Produto</th>
@@ -165,8 +184,8 @@
 </div>
 
 <!-- Modal -->
-<div id="modal-contagem" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-    <div class="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+<div id="modal-contagem" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div class="bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl max-h-[95vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-4">
             <h2 id="modal-produto-nome" class="text-2xl font-bold text-amber-500"></h2>
             {% if session.get('is_gerente') or session.get('funcao') == 'Estoquista Chefe' %}
@@ -178,16 +197,46 @@
             <input type="hidden" id="modal-produto-id">
             <input type="hidden" id="modal-local-id" value="{{ local.id }}">
             
-            <!-- Input Quantidade -->
+            <!-- Input Quantidade (readonly para usar apenas teclado customizado) -->
             <div>
                 <label for="modal-quantidade" class="block text-gray-300 mb-2">Quantidade</label>
-                <input type="number" 
+                <input type="text" 
                        id="modal-quantidade" 
-                       step="0.01" 
-                       min="0"
+                       readonly
                        required
-                       class="w-full text-2xl p-4 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                       placeholder="Use o teclado abaixo"
+                       class="w-full text-3xl p-4 bg-slate-700 text-gray-100 rounded-lg text-center font-bold cursor-default focus:outline-none focus:ring-2 focus:ring-amber-500">
                 <p id="equivalencia-info" class="text-xs text-gray-400 mt-1 hidden"></p>
+            </div>
+            
+            <!-- Teclado Numérico Customizado -->
+            <div id="teclado-numerico" class="bg-slate-700/50 rounded-lg p-3">
+                <div class="grid grid-cols-3 gap-2">
+                    <!-- Linha 1: 7 8 9 -->
+                    <button type="button" onclick="digitarNumero('7')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">7</button>
+                    <button type="button" onclick="digitarNumero('8')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">8</button>
+                    <button type="button" onclick="digitarNumero('9')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">9</button>
+                    
+                    <!-- Linha 2: 4 5 6 -->
+                    <button type="button" onclick="digitarNumero('4')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">4</button>
+                    <button type="button" onclick="digitarNumero('5')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">5</button>
+                    <button type="button" onclick="digitarNumero('6')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">6</button>
+                    
+                    <!-- Linha 3: 1 2 3 -->
+                    <button type="button" onclick="digitarNumero('1')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">1</button>
+                    <button type="button" onclick="digitarNumero('2')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">2</button>
+                    <button type="button" onclick="digitarNumero('3')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">3</button>
+                    
+                    <!-- Linha 4: . 0 ← -->
+                    <button type="button" id="btn-decimal" onclick="digitarNumero('.')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">.</button>
+                    <button type="button" onclick="digitarNumero('0')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">0</button>
+                    <button type="button" onclick="apagarDigito()" class="bg-red-600 hover:bg-red-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-red-400">←</button>
+                </div>
+                
+                <!-- Botão Limpar (linha completa) -->
+                <button type="button" onclick="limparQuantidade()" class="w-full mt-2 bg-orange-600 hover:bg-orange-500 text-white text-lg font-bold py-3 rounded-lg transition-colors active:bg-orange-400">
+                    LIMPAR
+                </button>
             </div>
             
             <!-- Select Unidade -->
@@ -215,9 +264,91 @@
     </div>
 </div>
 
+<!-- MODAL DE TECLADO ALFABÉTICO -->
+<div id="modal-teclado-alfabetico" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div class="bg-slate-800 rounded-xl p-6 w-full mx-auto shadow-2xl max-h-[90vh] overflow-y-auto" style="max-width: 600px;">
+        <h3 class="text-xl font-bold text-amber-500 mb-4 text-center">Buscar por Nome</h3>
+        
+        <!-- Campo de Busca Interno -->
+        <div class="mb-4">
+            <input type="text" 
+                   id="busca-modal-interno" 
+                   readonly
+                   placeholder="Digite usando o teclado abaixo..." 
+                   class="w-full text-lg p-4 bg-slate-700 text-gray-100 rounded-lg border-2 border-amber-500/50 focus:border-amber-500 outline-none">
+        </div>
+        
+        <!-- Área de Resultados (aparece conforme digita) -->
+        <div id="resultados-modal-interno" class="hidden mb-4 bg-slate-700 rounded-lg max-h-48 overflow-y-auto">
+            <!-- Resultados aparecerão aqui via JS -->
+        </div>
+        
+        <!-- Teclado Alfabético -->
+        <div class="bg-slate-700/50 rounded-lg p-3 mb-4">
+            <!-- Linha 1: Q-P -->
+            <div class="grid grid-cols-10 gap-1 mb-1">
+                <button type="button" onclick="digitarLetra('Q')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">Q</button>
+                <button type="button" onclick="digitarLetra('W')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">W</button>
+                <button type="button" onclick="digitarLetra('E')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">E</button>
+                <button type="button" onclick="digitarLetra('R')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">R</button>
+                <button type="button" onclick="digitarLetra('T')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">T</button>
+                <button type="button" onclick="digitarLetra('Y')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">Y</button>
+                <button type="button" onclick="digitarLetra('U')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">U</button>
+                <button type="button" onclick="digitarLetra('I')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">I</button>
+                <button type="button" onclick="digitarLetra('O')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">O</button>
+                <button type="button" onclick="digitarLetra('P')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">P</button>
+            </div>
+            
+            <!-- Linha 2: A-L -->
+            <div class="grid grid-cols-9 gap-1 mb-1 px-4">
+                <button type="button" onclick="digitarLetra('A')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">A</button>
+                <button type="button" onclick="digitarLetra('S')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">S</button>
+                <button type="button" onclick="digitarLetra('D')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">D</button>
+                <button type="button" onclick="digitarLetra('F')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">F</button>
+                <button type="button" onclick="digitarLetra('G')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">G</button>
+                <button type="button" onclick="digitarLetra('H')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">H</button>
+                <button type="button" onclick="digitarLetra('J')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">J</button>
+                <button type="button" onclick="digitarLetra('K')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">K</button>
+                <button type="button" onclick="digitarLetra('L')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">L</button>
+            </div>
+            
+            <!-- Linha 3: Z-M + Backspace -->
+            <div class="grid grid-cols-9 gap-1 mb-1 px-8">
+                <button type="button" onclick="digitarLetra('Z')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">Z</button>
+                <button type="button" onclick="digitarLetra('X')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">X</button>
+                <button type="button" onclick="digitarLetra('C')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">C</button>
+                <button type="button" onclick="digitarLetra('V')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">V</button>
+                <button type="button" onclick="digitarLetra('B')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">B</button>
+                <button type="button" onclick="digitarLetra('N')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">N</button>
+                <button type="button" onclick="digitarLetra('M')" class="bg-slate-600 hover:bg-slate-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-slate-400">M</button>
+                <button type="button" onclick="apagarLetra()" class="col-span-2 bg-red-600 hover:bg-red-500 text-white text-xl font-bold py-3 rounded transition-colors active:bg-red-400">←</button>
+            </div>
+            
+            <!-- Linha 4: Espaço -->
+            <div class="grid grid-cols-1 gap-1">
+                <button type="button" onclick="digitarLetra(' ')" class="bg-slate-600 hover:bg-slate-500 text-white text-lg font-bold py-3 rounded transition-colors active:bg-slate-400">ESPAÇO</button>
+            </div>
+        </div>
+        
+        <!-- Botões de Ação -->
+        <div class="grid grid-cols-2 gap-3">
+            <button type="button" 
+                    onclick="limparBuscaDoTeclado()"
+                    class="bg-orange-600 hover:bg-orange-500 text-white font-semibold py-3 rounded-lg transition-colors">
+                LIMPAR TUDO
+            </button>
+            <button type="button" 
+                    onclick="fecharTecladoAlfabetico()"
+                    class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-lg transition-colors">
+                FECHAR
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- MODAL DE OCORRÊNCIA (Item Não Cadastrado) -->
-<div id="modal-ocorrencia" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-    <div class="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+<div id="modal-ocorrencia" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div class="bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-2xl font-bold text-amber-500">⚠️ Item Não Cadastrado</h2>
             <button type="button" onclick="fecharModalOcorrencia()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
@@ -239,13 +370,42 @@
             <!-- Quantidade -->
             <div>
                 <label for="ocorrencia-quantidade" class="block text-gray-300 mb-2">Quantidade *</label>
-                <input type="number" 
+                <input type="text" 
                        id="ocorrencia-quantidade" 
-                       step="0.01" 
-                       min="0"
-                       placeholder="Ex: 15"
+                       readonly
+                       placeholder="Toque aqui para digitar..."
                        required
-                       class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                       class="w-full text-2xl p-4 bg-slate-700 text-gray-100 rounded-lg text-center font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500">
+                
+                <!-- Teclado Numérico Customizado (aparece no focus) -->
+                <div id="teclado-ocorrencia" class="hidden bg-slate-700/50 rounded-lg p-3 mt-3">
+                    <div class="grid grid-cols-3 gap-2">
+                        <!-- Linha 1: 7, 8, 9 -->
+                        <button type="button" onclick="digitarNumeroOcorrencia('7')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">7</button>
+                        <button type="button" onclick="digitarNumeroOcorrencia('8')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">8</button>
+                        <button type="button" onclick="digitarNumeroOcorrencia('9')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">9</button>
+                        
+                        <!-- Linha 2: 4, 5, 6 -->
+                        <button type="button" onclick="digitarNumeroOcorrencia('4')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">4</button>
+                        <button type="button" onclick="digitarNumeroOcorrencia('5')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">5</button>
+                        <button type="button" onclick="digitarNumeroOcorrencia('6')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">6</button>
+                        
+                        <!-- Linha 3: 1, 2, 3 -->
+                        <button type="button" onclick="digitarNumeroOcorrencia('1')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">1</button>
+                        <button type="button" onclick="digitarNumeroOcorrencia('2')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">2</button>
+                        <button type="button" onclick="digitarNumeroOcorrencia('3')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">3</button>
+                        
+                        <!-- Linha 4: ., 0, ← -->
+                        <button type="button" id="btn-decimal-ocorrencia" onclick="digitarNumeroOcorrencia('.')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">.</button>
+                        <button type="button" onclick="digitarNumeroOcorrencia('0')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">0</button>
+                        <button type="button" onclick="apagarDigitoOcorrencia()" class="bg-red-600 hover:bg-red-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-red-400">←</button>
+                    </div>
+                    
+                    <!-- Botão Limpar (linha completa) -->
+                    <button type="button" onclick="limparQuantidadeOcorrencia()" class="w-full mt-2 bg-orange-600 hover:bg-orange-500 text-white text-lg font-bold py-3 rounded-lg transition-colors active:bg-orange-400">
+                        LIMPAR
+                    </button>
+                </div>
             </div>
             
             <!-- Unidade de Medida -->
@@ -770,9 +930,19 @@ carregarEstadoLista();
 // BUSCA E MODAL (ORIGINAL, COM AJUSTES)
 // ============================================
 
-// Busca de produtos
-inputBusca.addEventListener('input', function() {
-    const termo = this.value.toLowerCase().trim();
+/**
+ * Realiza a busca de produtos baseado no valor do input
+ */
+function realizarBusca() {
+    const termo = inputBusca.value.toLowerCase().trim();
+    
+    // Mostra/oculta botão de limpar baseado no conteúdo
+    const btnLimpar = document.getElementById('btn-limpar-busca');
+    if (inputBusca.value.length > 0) {
+        btnLimpar.classList.remove('hidden');
+    } else {
+        btnLimpar.classList.add('hidden');
+    }
     
     if (termo.length === 0) {
         resultadosBusca.classList.add('hidden');
@@ -805,7 +975,117 @@ inputBusca.addEventListener('input', function() {
     `).join('');
     
     resultadosBusca.classList.remove('hidden');
-});
+}
+
+// Busca de produtos
+inputBusca.addEventListener('input', realizarBusca);
+
+/**
+ * Limpa o campo de busca e retorna o foco para ele
+ */
+function limparBusca() {
+    inputBusca.value = '';
+    inputBusca.focus();
+    resultadosBusca.classList.add('hidden');
+    document.getElementById('btn-limpar-busca').classList.add('hidden');
+}
+
+// =========================
+// TECLADO ALFABÉTICO
+// =========================
+
+const inputBuscaModalInterno = document.getElementById('busca-modal-interno');
+const resultadosModalInterno = document.getElementById('resultados-modal-interno');
+
+/**
+ * Abre o modal do teclado alfabético
+ */
+function abrirTecladoAlfabetico() {
+    const modalTeclado = document.getElementById('modal-teclado-alfabetico');
+    modalTeclado.classList.remove('hidden');
+    inputBuscaModalInterno.value = ''; // Limpa o campo interno
+    resultadosModalInterno.classList.add('hidden'); // Esconde resultados
+    resultadosModalInterno.innerHTML = ''; // Limpa conteúdo
+}
+
+/**
+ * Fecha o modal do teclado alfabético
+ */
+function fecharTecladoAlfabetico() {
+    const modalTeclado = document.getElementById('modal-teclado-alfabetico');
+    modalTeclado.classList.add('hidden');
+}
+
+/**
+ * Digita uma letra no campo de busca interno do modal
+ */
+function digitarLetra(letra) {
+    inputBuscaModalInterno.value += letra;
+    realizarBuscaNoModal();
+}
+
+/**
+ * Remove a última letra (backspace)
+ */
+function apagarLetra() {
+    inputBuscaModalInterno.value = inputBuscaModalInterno.value.slice(0, -1);
+    realizarBuscaNoModal();
+}
+
+/**
+ * Limpa completamente a busca do teclado alfabético
+ */
+function limparBuscaDoTeclado() {
+    inputBuscaModalInterno.value = '';
+    resultadosModalInterno.classList.add('hidden');
+    resultadosModalInterno.innerHTML = '';
+}
+
+/**
+ * Realiza a busca dentro do modal e exibe os resultados
+ */
+function realizarBuscaNoModal() {
+    const termo = inputBuscaModalInterno.value.toLowerCase().trim();
+    
+    if (termo.length === 0) {
+        resultadosModalInterno.classList.add('hidden');
+        resultadosModalInterno.innerHTML = '';
+        return;
+    }
+    
+    const resultados = todosProdutos.filter(produto => {
+        const nome = produto.nome.toLowerCase();
+        const gtin = String(produto.gtin || '').toLowerCase();
+        const erp = String(produto.id_erp || '').toLowerCase();
+        
+        return nome.includes(termo) || 
+               gtin.includes(termo) || 
+               erp.includes(termo);
+    });
+    
+    if (resultados.length === 0) {
+        resultadosModalInterno.innerHTML = '<div class="p-4 text-gray-400 text-center">Nenhum produto encontrado</div>';
+        resultadosModalInterno.classList.remove('hidden');
+        return;
+    }
+    
+    resultadosModalInterno.innerHTML = resultados.map(produto => `
+        <button onclick="selecionarProdutoDoModal(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}')" 
+                class="w-full text-left p-4 hover:bg-slate-600 transition-colors border-b border-slate-600 last:border-0">
+            <div class="font-semibold text-gray-100">${produto.nome}</div>
+        </button>
+    `).join('');
+    
+    resultadosModalInterno.classList.remove('hidden');
+}
+
+/**
+ * Seleciona um produto da lista do modal e abre o modal de contagem
+ */
+function selecionarProdutoDoModal(produtoId, produtoNome) {
+    fecharTecladoAlfabetico();
+    abrirModal(produtoId, produtoNome);
+}
 
 // Fechar busca ao clicar fora
 document.addEventListener('click', function(e) {
@@ -865,13 +1145,59 @@ function abrirModal(produtoId, produtoNome) {
 
     // Prepara o modal (editor rápido movido para modal reutilizável)
     
-    // Ajusta step baseado na unidade selecionada
+    // Ajusta botão decimal baseado na unidade selecionada
     modalUnidade.dispatchEvent(new Event('change'));
     
     modal.classList.remove('hidden');
-    modalQuantidade.focus();
     resultadosBusca.classList.add('hidden');
     inputBusca.value = '';
+}
+
+// =========================
+// TECLADO NUMÉRICO CUSTOMIZADO
+// =========================
+
+/**
+ * Digita um número ou ponto decimal no input de quantidade
+ */
+function digitarNumero(digito) {
+    const input = document.getElementById('modal-quantidade');
+    const valorAtual = input.value;
+    
+    // Validação: não permite mais de um ponto decimal
+    if (digito === '.' && valorAtual.includes('.')) {
+        return;
+    }
+    
+    // Validação: não permite ponto decimal se unidade não permitir
+    const option = modalUnidade.options[modalUnidade.selectedIndex];
+    const permiteDecimal = option.getAttribute('data-decimal') === 'true';
+    if (digito === '.' && !permiteDecimal) {
+        return;
+    }
+    
+    // Adiciona o dígito
+    input.value = valorAtual + digito;
+    
+    // Atualiza equivalência
+    atualizarEquivalencia();
+}
+
+/**
+ * Remove o último dígito (backspace)
+ */
+function apagarDigito() {
+    const input = document.getElementById('modal-quantidade');
+    input.value = input.value.slice(0, -1);
+    atualizarEquivalencia();
+}
+
+/**
+ * Limpa completamente o input de quantidade
+ */
+function limparQuantidade() {
+    document.getElementById('modal-quantidade').value = '';
+    atualizarEquivalencia();
 }
 
 // Fechar modal
@@ -905,16 +1231,26 @@ function atualizarEquivalencia() {
     info.classList.remove('hidden');
 }
 
-// Mudança de unidade - ajusta step e equivalência
+// Mudança de unidade - ajusta botão decimal e limpa valor se necessário
 modalUnidade.addEventListener('change', function() {
     const option = this.options[this.selectedIndex];
     const permiteDecimal = option.getAttribute('data-decimal') === 'true';
-    modalQuantidade.step = permiteDecimal ? '0.01' : '1';
     
-    // Se mudou para unidade que não permite decimal, arredonda o valor atual
-    if (!permiteDecimal && modalQuantidade.value) {
-        modalQuantidade.value = Math.round(parseFloat(modalQuantidade.value));
+    // Habilita/desabilita botão decimal
+    const btnDecimal = document.getElementById('btn-decimal');
+    if (permiteDecimal) {
+        btnDecimal.disabled = false;
+        btnDecimal.classList.remove('opacity-50', 'cursor-not-allowed');
+    } else {
+        btnDecimal.disabled = true;
+        btnDecimal.classList.add('opacity-50', 'cursor-not-allowed');
+        
+        // Se mudou para unidade que não permite decimal, remove ponto decimal do valor atual
+        if (modalQuantidade.value && modalQuantidade.value.includes('.')) {
+            modalQuantidade.value = Math.floor(parseFloat(modalQuantidade.value) || 0).toString();
+        }
     }
+    
     atualizarEquivalencia();
 });
 
@@ -925,11 +1261,20 @@ formContagem.addEventListener('submit', async function(e) {
     e.preventDefault();
     
     const produtoId = parseInt(document.getElementById('modal-produto-id').value);
-    const quantidade = parseFloat(modalQuantidade.value);
+    const quantidadeTexto = modalQuantidade.value.trim();
+    
+    // Validação de quantidade vazia
+    if (!quantidadeTexto) {
+        alert('Por favor, insira uma quantidade.');
+        return;
+    }
+    
+    const quantidade = parseFloat(quantidadeTexto);
     const unidadeId = parseInt(modalUnidade.value);
     
-    if (!quantidade || quantidade <= 0) {
-        alert('Por favor, insira uma quantidade válida.');
+    // Validação de quantidade inválida ou zero
+    if (isNaN(quantidade) || quantidade <= 0) {
+        alert('Por favor, insira uma quantidade válida maior que zero.');
         return;
     }
     
@@ -1150,9 +1495,78 @@ function abrirModalOcorrencia() {
     // Atualiza visibilidade de foto conforme conexão
     atualizarFotoOcorrencia();
     
+    // Limpa campo de quantidade
+    document.getElementById('ocorrencia-quantidade').value = '';
+    document.getElementById('teclado-ocorrencia').classList.add('hidden');
+    
     // Abre modal
     modalOcorrencia.classList.remove('hidden');
     document.getElementById('ocorrencia-nome').focus();
+}
+
+// =========================
+// TECLADO NUMÉRICO DA OCORRÊNCIA
+// =========================
+
+const inputOcorrenciaQuantidade = document.getElementById('ocorrencia-quantidade');
+const tecladoOcorrencia = document.getElementById('teclado-ocorrencia');
+
+/**
+ * Mostra o teclado quando o campo de quantidade recebe foco
+ */
+if (inputOcorrenciaQuantidade) {
+    inputOcorrenciaQuantidade.addEventListener('focus', function() {
+        tecladoOcorrencia.classList.remove('hidden');
+    });
+    
+    inputOcorrenciaQuantidade.addEventListener('click', function() {
+        tecladoOcorrencia.classList.remove('hidden');
+    });
+}
+
+/**
+ * Esconde o teclado quando clica fora do campo e do teclado
+ */
+document.addEventListener('click', function(e) {
+    if (inputOcorrenciaQuantidade && tecladoOcorrencia) {
+        const dentroDoInput = inputOcorrenciaQuantidade.contains(e.target);
+        const dentroDoTeclado = tecladoOcorrencia.contains(e.target);
+        
+        if (!dentroDoInput && !dentroDoTeclado) {
+            tecladoOcorrencia.classList.add('hidden');
+        }
+    }
+});
+
+/**
+ * Digita um número ou ponto decimal no campo de quantidade da ocorrência
+ */
+function digitarNumeroOcorrencia(digito) {
+    const input = document.getElementById('ocorrencia-quantidade');
+    const valorAtual = input.value;
+    
+    // Validação: não permite mais de um ponto decimal
+    if (digito === '.' && valorAtual.includes('.')) {
+        return;
+    }
+    
+    // Adiciona o dígito
+    input.value = valorAtual + digito;
+}
+
+/**
+ * Remove o último dígito (backspace)
+ */
+function apagarDigitoOcorrencia() {
+    const input = document.getElementById('ocorrencia-quantidade');
+    input.value = input.value.slice(0, -1);
+}
+
+/**
+ * Limpa completamente o campo de quantidade da ocorrência
+ */
+function limparQuantidadeOcorrencia() {
+    document.getElementById('ocorrencia-quantidade').value = '';
 }
 
 /**

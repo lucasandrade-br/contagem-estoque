@@ -116,6 +116,10 @@ def api_vincular_ocorrencia():
     data = request.json
     id_ocorrencia = data.get('id_ocorrencia')
     id_produto_destino = data.get('id_produto_destino')
+    
+    # Novos parâmetros opcionais do modal de validação
+    quantidade_editada = data.get('quantidade')  # Pode ser None
+    unidade_id_editada = data.get('unidade_id')  # Pode ser None
 
     db = get_db()
     ocorrencia = db.execute('SELECT * FROM ocorrencias WHERE id = ?', (id_ocorrencia,)).fetchone()
@@ -131,8 +135,11 @@ def api_vincular_ocorrencia():
     if not produto:
         return jsonify({'erro': 'Produto destino não encontrado'}), 404
 
+    # Usa valores editados se fornecidos, senão usa valores originais da ocorrência
+    qtd_informada = float(quantidade_editada) if quantidade_editada else float(ocorrencia['quantidade'])
+    id_unidade_usada = int(unidade_id_editada) if unidade_id_editada else int(ocorrencia['id_unidade'])
+    
     fator_conversao = 1.0
-    id_unidade_usada = int(ocorrencia['id_unidade'])
     id_unidade_padrao = int(produto['id_unidade_padrao'])
     if id_unidade_usada != id_unidade_padrao:
         fator_row = db.execute('''
@@ -142,7 +149,6 @@ def api_vincular_ocorrencia():
         if fator_row:
             fator_conversao = float(fator_row['fator_conversao'])
 
-    qtd_informada = float(ocorrencia['quantidade'])
     qtd_padrao = qtd_informada * fator_conversao
     preco_snapshot = float(produto['preco_custo'] or 0)
     sigla_snapshot = produto['sigla_padrao']
@@ -176,6 +182,11 @@ def api_vincular_ocorrencia():
 
 @bp.route('/cadastrar_da_ocorrencia', methods=['POST'])
 def cadastrar_da_ocorrencia():
+    """
+    Cria um novo produto a partir de uma ocorrência.
+    Retorna os dados do produto para que o frontend abra o modal de validação.
+    A contagem será criada apenas após confirmação no modal de validação.
+    """
     if not session.get('is_gerente'):
         return jsonify({'erro': 'Acesso negado'}), 403
 
@@ -186,37 +197,56 @@ def cadastrar_da_ocorrencia():
     ocorrencia = db.execute('SELECT * FROM ocorrencias WHERE id = ?', (id_ocorrencia,)).fetchone()
     if not ocorrencia:
         return jsonify({'erro': 'Ocorrência não encontrada'}), 404
+    
     try:
         cur = db.cursor()
+        
+        # Trata campos vazios como NULL para evitar erro de UNIQUE constraint
+        id_erp = dados.get('id_erp', '').strip() or None
+        gtin = dados.get('gtin', '').strip() or None
+        categoria = dados.get('categoria', '').strip() or None
+        
         cur.execute('''
             INSERT INTO produtos (nome, id_erp, gtin, categoria, preco_custo, id_unidade_padrao, ativo)
             VALUES (?, ?, ?, ?, ?, ?, 1)
         ''', (
             dados.get('nome'),
-            dados.get('id_erp'),
-            dados.get('gtin'),
-            dados.get('categoria'),
+            id_erp,
+            gtin,
+            categoria,
             dados.get('preco_custo') or 0,
             dados.get('id_unidade_padrao')
         ))
         novo_prod_id = cur.lastrowid
 
-        db.execute('''
-            INSERT INTO contagens 
-            (id_inventario, id_local, id_produto, quantidade, id_unidade_usada, id_usuario, data_hora)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (
-            ocorrencia['id_inventario'],
-            ocorrencia['id_local'],
-            novo_prod_id,
-            ocorrencia['quantidade'],
-            ocorrencia['id_unidade'],
-            session.get('user_id')
-        ))
+        # Busca informações completas do novo produto para retornar ao frontend
+        novo_produto = db.execute('''
+            SELECT 
+                p.id, p.nome, p.id_erp, p.gtin, p.categoria, 
+                p.preco_custo, p.id_unidade_padrao,
+                u.sigla as unidade_padrao_sigla, u.nome as unidade_padrao_nome
+            FROM produtos p
+            JOIN unidades_medida u ON p.id_unidade_padrao = u.id
+            WHERE p.id = ?
+        ''', (novo_prod_id,)).fetchone()
 
-        db.execute('UPDATE ocorrencias SET resolvido = 1, obs = ? WHERE id = ?', (f'Gerado novo produto ID {novo_prod_id}', id_ocorrencia))
         db.commit()
-        return jsonify({'sucesso': True})
+        
+        # Retorna os dados do produto criado para o modal de validação
+        return jsonify({
+            'sucesso': True,
+            'produto': {
+                'id': novo_produto['id'],
+                'nome': novo_produto['nome'],
+                'id_erp': novo_produto['id_erp'],
+                'gtin': novo_produto['gtin'],
+                'categoria': novo_produto['categoria'],
+                'preco_custo': novo_produto['preco_custo'],
+                'id_unidade_padrao': novo_produto['id_unidade_padrao'],
+                'unidade_padrao_sigla': novo_produto['unidade_padrao_sigla'],
+                'unidade_padrao_nome': novo_produto['unidade_padrao_nome']
+            }
+        })
     except Exception as exc:
         db.rollback()
         return jsonify({'erro': str(exc)}), 500
