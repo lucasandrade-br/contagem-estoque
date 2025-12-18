@@ -1117,6 +1117,7 @@ def admin_produtos():
         gtin = request.form.get('gtin', '').strip() or None
         preco_custo = float(request.form.get('preco_custo', 0) or 0)
         preco_venda = float(request.form.get('preco_venda', 0) or 0)
+        ativo = 1 if request.form.get('ativo') else 0
         unidades_permitidas = request.form.getlist('unidades_permitidas')
 
         if not nome or not id_unidade_padrao:
@@ -1129,14 +1130,14 @@ def admin_produtos():
                 if produto_id:
                     db.execute('''
                         UPDATE produtos
-                        SET nome = ?, categoria = ?, id_unidade_padrao = ?, id_erp = ?, gtin = ?, preco_custo = ?, preco_venda = ?
+                        SET nome = ?, categoria = ?, id_unidade_padrao = ?, id_erp = ?, gtin = ?, preco_custo = ?, preco_venda = ?, ativo = ?
                         WHERE id = ?
-                    ''', (nome, categoria or None, int(id_unidade_padrao), id_erp, gtin, preco_custo, preco_venda, int(produto_id)))
+                    ''', (nome, categoria or None, int(id_unidade_padrao), id_erp, gtin, preco_custo, preco_venda, ativo, int(produto_id)))
                 else:
                     cursor = db.execute('''
-                        INSERT INTO produtos (nome, categoria, id_unidade_padrao, id_erp, gtin, preco_custo, preco_venda)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ''', (nome, categoria or None, int(id_unidade_padrao), id_erp, gtin, preco_custo, preco_venda))
+                        INSERT INTO produtos (nome, categoria, id_unidade_padrao, id_erp, gtin, preco_custo, preco_venda, ativo)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (nome, categoria or None, int(id_unidade_padrao), id_erp, gtin, preco_custo, preco_venda, ativo))
                     produto_id = cursor.lastrowid
 
                 db.execute('DELETE FROM produtos_unidades WHERE id_produto = ?', (produto_id,))
@@ -1171,7 +1172,7 @@ def admin_produtos():
     pagina = request.args.get('page', 1, type=int)
     itens_por_pagina = 50
 
-    where_sql = "WHERE p.ativo=1"
+    where_sql = "WHERE (p.ativo=1 or p.ativo=0)"
     params = []
     if termo:
         where_sql += " AND (p.nome LIKE ? OR p.gtin LIKE ? OR p.id_erp LIKE ?)"

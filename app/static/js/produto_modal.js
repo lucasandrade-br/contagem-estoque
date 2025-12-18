@@ -70,6 +70,10 @@ function editarProduto(id) {
             const elVenda = document.getElementById('prod_preco_venda');
             if (elVenda) elVenda.value = data.preco_venda || '';
 
+            // Status Ativo/Inativo
+            const elAtivo = document.getElementById('prod_ativo');
+            if (elAtivo) elAtivo.checked = data.ativo === 1 || data.ativo === true;
+
             // Unidade Padrão
             document.getElementById('prod_unidade_padrao').value = data.id_unidade_padrao;
 

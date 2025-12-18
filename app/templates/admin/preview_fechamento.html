@@ -171,6 +171,31 @@
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Controles de Paginação -->
+            <div class="bg-slate-700/30 border-t border-slate-600 p-4 flex items-center justify-between">
+                <div class="text-sm text-gray-400">
+                    Mostrando <span id="paginaInicio" class="font-bold text-white">1</span> a 
+                    <span id="paginaFim" class="font-bold text-white">30</span> de 
+                    <span id="totalItens" class="font-bold text-white">{{ comparacao|length }}</span> itens
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button onclick="mudarPagina('anterior')" id="btnAnterior"
+                            class="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        ← Anterior
+                    </button>
+                    
+                    <span class="px-4 py-2 bg-slate-800 text-white rounded border border-slate-600">
+                        Página <span id="paginaAtual" class="font-bold">1</span> de <span id="totalPaginas" class="font-bold">1</span>
+                    </span>
+                    
+                    <button onclick="mudarPagina('proxima')" id="btnProxima"
+                            class="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        Próxima →
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Alertas -->
@@ -219,15 +244,21 @@
 
 <script>
 let filtroAtual = 'todos';
+let paginaAtual = 1;
+const ITENS_POR_PAGINA = 30;
 
 function filtrarTabela(tipo) {
     filtroAtual = tipo;
+    paginaAtual = 1; // Resetar para primeira página ao filtrar
+    
     const rows = document.querySelectorAll('.row-item');
     
-    // Atualizar botões
+    // Atualizar botões de filtro
     document.querySelectorAll('[id^="btn"]').forEach(btn => {
-        btn.classList.remove('bg-blue-600', 'bg-amber-600', 'bg-emerald-600', 'bg-red-600');
-        btn.classList.add('bg-slate-700');
+        if (!btn.id.includes('Anterior') && !btn.id.includes('Proxima')) {
+            btn.classList.remove('bg-blue-600', 'bg-amber-600', 'bg-emerald-600', 'bg-red-600');
+            btn.classList.add('bg-slate-700');
+        }
     });
     
     let btnAtivo = null;
@@ -252,29 +283,84 @@ function filtrarTabela(tipo) {
         btnAtivo.classList.add(corAtiva);
     }
     
-    // Filtrar linhas
+    // Aplicar filtro e paginação
+    aplicarFiltroEPaginacao();
+}
+
+function aplicarFiltroEPaginacao() {
+    const rows = document.querySelectorAll('.row-item');
+    let itensFiltrados = [];
+    
+    // Primeiro, filtrar as linhas
     rows.forEach(row => {
         const tipoAjuste = row.dataset.tipo;
         const foiContado = row.dataset.contado;
         
         let mostrar = false;
         
-        if (tipo === 'todos') {
+        if (filtroAtual === 'todos') {
             mostrar = true;
-        } else if (tipo === 'divergencias') {
+        } else if (filtroAtual === 'divergencias') {
             mostrar = tipoAjuste !== 'OK';
-        } else if (tipo === 'ok') {
+        } else if (filtroAtual === 'ok') {
             mostrar = tipoAjuste === 'OK';
-        } else if (tipo === 'nao_contados') {
+        } else if (filtroAtual === 'nao_contados') {
             mostrar = foiContado === 'nao';
         }
         
         if (mostrar) {
-            row.classList.remove('hidden');
-        } else {
-            row.classList.add('hidden');
+            itensFiltrados.push(row);
         }
     });
+    
+    // Calcular paginação
+    const totalItens = itensFiltrados.length;
+    const totalPaginas = Math.ceil(totalItens / ITENS_POR_PAGINA);
+    const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+    const fim = Math.min(inicio + ITENS_POR_PAGINA, totalItens);
+    
+    // Esconder todas as linhas primeiro
+    rows.forEach(row => row.classList.add('hidden'));
+    
+    // Mostrar apenas as linhas da página atual
+    for (let i = inicio; i < fim; i++) {
+        itensFiltrados[i].classList.remove('hidden');
+    }
+    
+    // Atualizar informações de paginação
+    document.getElementById('paginaAtual').textContent = paginaAtual;
+    document.getElementById('totalPaginas').textContent = totalPaginas;
+    document.getElementById('paginaInicio').textContent = totalItens > 0 ? inicio + 1 : 0;
+    document.getElementById('paginaFim').textContent = fim;
+    document.getElementById('totalItens').textContent = totalItens;
+    
+    // Habilitar/desabilitar botões de navegação
+    const btnAnterior = document.getElementById('btnAnterior');
+    const btnProxima = document.getElementById('btnProxima');
+    
+    btnAnterior.disabled = paginaAtual === 1;
+    btnProxima.disabled = paginaAtual >= totalPaginas;
 }
+
+function mudarPagina(direcao) {
+    const totalItens = parseInt(document.getElementById('totalItens').textContent);
+    const totalPaginas = Math.ceil(totalItens / ITENS_POR_PAGINA);
+    
+    if (direcao === 'anterior' && paginaAtual > 1) {
+        paginaAtual--;
+    } else if (direcao === 'proxima' && paginaAtual < totalPaginas) {
+        paginaAtual++;
+    }
+    
+    aplicarFiltroEPaginacao();
+    
+    // Rolar para o topo da tabela
+    document.querySelector('.bg-slate-800\\/50').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Inicializar paginação ao carregar a página
+document.addEventListener('DOMContentLoaded', function() {
+    aplicarFiltroEPaginacao();
+});
 </script>
 {% endblock %}

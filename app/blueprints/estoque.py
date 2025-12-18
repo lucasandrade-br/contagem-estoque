@@ -54,13 +54,14 @@ def contagem(local_id):
             INNER JOIN produto_categoria_inventario pci ON p.id = pci.id_produto
             WHERE p.ativo = 1 
               AND pci.id_categoria = ?
-              AND (p.categoria IS NULL OR (UPPER(p.categoria) != 'NAO CONTA' AND UPPER(p.categoria) != 'NÃO CONTA'))
             ORDER BY p.nome
         ''', (inv['id_categoria_escopo'],)).fetchall()]
+        # AND (p.categoria IS NULL OR (UPPER(p.categoria) != 'NAO CONTA' AND UPPER(p.categoria) != 'NÃO CONTA'))
     else:
         # Inventário COMPLETO: busca todos os produtos ativos
         produtos = [dict(r) for r in db.execute(
-            "SELECT * FROM produtos WHERE ativo=1 AND (categoria IS NULL OR (UPPER(categoria) != 'NAO CONTA' AND UPPER(categoria) != 'NÃO CONTA')) ORDER BY nome"
+            "SELECT * FROM produtos WHERE ativo=1 ORDER BY nome"
+            # (categoria IS NULL OR (UPPER(categoria) != 'NAO CONTA' AND UPPER(categoria) != 'NÃO CONTA'))
         ).fetchall()]
 
     unidades_rows = db.execute('''
