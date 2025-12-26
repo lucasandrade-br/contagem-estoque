@@ -8,7 +8,7 @@ __pycache__/
 
 # Ignorar ambientes virtuais (se houver)
 venv/
-.env
+
 
 # Ignorar arquivos de sistema
 .DS_Store

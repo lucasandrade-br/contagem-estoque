@@ -52,6 +52,14 @@ pip install -r requirements.txt
 
 echo.
 echo ========================================================
+echo      CRIANDO BANCO DE DADOS
+echo ========================================================
+echo.
+echo Executando script de criacao do banco...
+python database\setup_db_v2.py
+
+echo.
+echo ========================================================
 echo      INSTALACAO CONCLUIDA COM SUCESSO!
 echo ========================================================
 echo.
