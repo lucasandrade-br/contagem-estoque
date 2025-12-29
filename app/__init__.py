@@ -30,6 +30,18 @@ def create_app(config_object=None):
     def make_session_permanent():
         session.permanent = True
 
+    # Context processor para injetar variáveis de perfil em todos os templates
+    @app.context_processor
+    def inject_perfil():
+        from dotenv import load_dotenv
+        load_dotenv()
+        perfil = os.getenv('PERFIL_MAQUINA', 'LOJA').strip().upper()
+        return {
+            'PERFIL_SISTEMA': perfil,
+            'MODO_LEITURA': perfil == 'GERENTE',
+            'OCULTAR_CONTAGEM': perfil in ['GERENTE', 'CADASTRO']
+        }
+
     # Blueprints
     from .blueprints.auth import bp as auth_bp
     from .blueprints.estoque import bp as estoque_bp

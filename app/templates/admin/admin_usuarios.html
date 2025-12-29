@@ -28,6 +28,7 @@
         {% endwith %}
         
         <!-- Formulário de Novo/Editar -->
+        {% if not MODO_LEITURA %}
         <div class="bg-slate-800 rounded-xl p-6 shadow-xl mb-6">
             <h2 class="text-xl font-semibold text-gray-100 mb-4" id="form-title">Novo Usuário</h2>
             <form method="POST" id="form-usuario" class="space-y-4">
@@ -91,6 +92,7 @@
                 </div>
             </form>
         </div>
+        {% endif %}
         
         <!-- Tabela de Usuários -->
         <div class="bg-slate-800 rounded-xl p-6 shadow-xl overflow-x-auto">
@@ -118,31 +120,33 @@
                         </td>
                         <td class="p-3">
                             <div class="flex gap-2">
+                                {% if not MODO_LEITURA %}
                                 <button onclick="editarUsuario({{ usuario.id }}, '{{ usuario.nome }}', '{{ usuario.funcao }}', {{ 1 if usuario.ativo else 0 }})" 
                                         class="text-amber-500 hover:text-amber-400 transition-colors">
                                     ✏️ Editar
                                 </button>
-                                {% if usuario.ativo %}
-                                <form method="POST" class="inline" onsubmit="return confirm('Deseja desativar este usuário?');">
-                                    <input type="hidden" name="action" value="delete">
-                                    <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
-                                    <button type="submit" 
-                                            class="text-rose-500 hover:text-rose-400 transition-colors">
-                                        🗑️ Desativar
-                                    </button>
-                                </form>
-                                {% else %}
-                                <form method="POST" class="inline">
-                                    <input type="hidden" name="action" value="save">
-                                    <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
-                                    <input type="hidden" name="nome" value="{{ usuario.nome }}">
-                                    <input type="hidden" name="funcao" value="{{ usuario.funcao }}">
-                                    <input type="hidden" name="ativo" value="on">
-                                    <button type="submit" 
-                                            class="text-emerald-500 hover:text-emerald-400 transition-colors">
-                                        ✅ Ativar
-                                    </button>
-                                </form>
+                                {% endif %}
+                                {% if not MODO_LEITURA and usuario.ativo %}
+                                    <form method="POST" class="inline" onsubmit="return confirm('Deseja desativar este usuário?');">
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                        <button type="submit" 
+                                                class="text-rose-500 hover:text-rose-400 transition-colors">
+                                            🗑️ Desativar
+                                        </button>
+                                    </form>
+                                    
+                                    <form method="POST" class="inline">
+                                        <input type="hidden" name="action" value="save">
+                                        <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                        <input type="hidden" name="nome" value="{{ usuario.nome }}">
+                                        <input type="hidden" name="funcao" value="{{ usuario.funcao }}">
+                                        <input type="hidden" name="ativo" value="on">
+                                        <button type="submit" 
+                                                class="text-emerald-500 hover:text-emerald-400 transition-colors">
+                                            ✅ Ativar
+                                        </button>
+                                    </form>
                                 {% endif %}
                             </div>
                         </td>

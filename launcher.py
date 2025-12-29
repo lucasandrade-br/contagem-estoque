@@ -81,12 +81,13 @@ def validar_configuracao():
         print("\n" + "="*60)
         sys.exit(1)
     
-    # Validação 2: PERFIL_MAQUINA deve ser LOJA ou GERENTE
-    if perfil not in ['LOJA', 'GERENTE']:
+    # Validação 2: PERFIL_MAQUINA deve ser LOJA, GERENTE ou CADASTRO
+    if perfil not in ['LOJA', 'GERENTE', 'CADASTRO']:
         print(f"❌ ERRO: Perfil '{perfil}' é inválido!")
         print("\n✅ Valores permitidos:")
-        print("   - LOJA (exporta backups para o Google Drive)")
-        print("   - GERENTE (sincroniza/baixa do Google Drive)")
+        print("   - LOJA (acesso total + exporta backups)")
+        print("   - GERENTE (somente leitura + sincroniza do Google Drive)")
+        print("   - CADASTRO (acesso total exceto Contagem/Ocorrências + exporta backups)")
         print("\n" + "="*60)
         sys.exit(1)
     
@@ -135,8 +136,8 @@ if __name__ == "__main__":
     fazer_backup()
 
     # 3. Sincronização com Google Drive
-    if PERFIL == 'LOJA':
-        # Computador da LOJA: Exporta para a nuvem ao iniciar
+    if PERFIL == 'LOJA' or PERFIL == 'CADASTRO':
+        # Computador da LOJA/CADASTRO: Exporta para a nuvem ao iniciar
         exportar_para_nuvem(CAMINHO_DRIVE)
         
         # Registra função para exportar novamente ao fechar o sistema

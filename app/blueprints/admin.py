@@ -11,6 +11,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, sessio
 from werkzeug.utils import secure_filename
 from ..db import get_db
 from ..utils import get_local_ip, registrar_movimento
+from dotenv import load_dotenv
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -185,8 +186,18 @@ def dashboard():
 
 @bp.route('/gerar_qrcode')
 def gerar_qrcode():
+    
+    load_dotenv()
+    perfil = os.getenv('PERFIL_MAQUINA', 'LOJA').strip().upper()
+    
     ip = get_local_ip()
-    url = f"http://{ip}:5000"
+    # LOJA: QR Code aponta para contagem (seleção de usuário)
+    # GERENTE/CADASTRO: QR Code aponta para área administrativa
+    if perfil == 'LOJA':
+        url = f"http://{ip}:5000"
+    else:
+        url = f"http://{ip}:5000/login_admin"
+    
     try:
         import qrcode
         img = qrcode.make(url)
@@ -201,8 +212,17 @@ def gerar_qrcode():
 @bp.route('/get_url_servidor')
 def get_url_servidor():
     """Retorna a URL do servidor para ser exibida no modal QR Code."""
+    from dotenv import load_dotenv
+    load_dotenv()
+    perfil = os.getenv('PERFIL_MAQUINA', 'LOJA').strip().upper()
+    
     ip = get_local_ip()
-    url = f"http://{ip}:5000"
+    # LOJA: URL para contagem | GERENTE/CADASTRO: URL para admin
+    if perfil == 'LOJA':
+        url = f"http://{ip}:5000"
+    else:
+        url = f"http://{ip}:5000/login_admin"
+    
     return jsonify({'url': url})
 
 

@@ -50,7 +50,7 @@
     {% endif %}
 
     <!-- Alerta de Ocorrências Pendentes -->
-    {% if ocorrencias_pendentes > 0 %}
+    {% if not OCULTAR_CONTAGEM and ocorrencias_pendentes > 0 %}
     <div class="mb-8 bg-gradient-to-r from-amber-900 to-orange-900 border-l-4 border-amber-400 rounded-lg p-6 shadow-lg animate-pulse">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-4">
@@ -68,61 +68,66 @@
     </div>
     {% endif %}
 
-    <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
-        <span class="w-2 h-6 bg-blue-500 rounded-full"></span> Operações
-    </h2>
-    
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-        
-        <div class="lg:col-span-2 bg-slate-800 rounded-xl border border-slate-700 p-6 flex flex-col justify-between relative overflow-hidden">
-            {% if inventario_aberto %}
-                <div class="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-                <div class="flex justify-between items-start">
-                    <div>
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="inline-block w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></span>
-                            <h3 class="text-lg font-bold text-white">Inventário Aberto</h3>
+    {% if not OCULTAR_CONTAGEM %}   
+        <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <span class="w-2 h-6 bg-blue-500 rounded-full"></span> Operações
+        </h2>
+         
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+            
+            <div class="lg:col-span-2 bg-slate-800 rounded-xl border border-slate-700 p-6 flex flex-col justify-between relative overflow-hidden">
+                {% if inventario_aberto %}
+                    <div class="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="inline-block w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></span>
+                                <h3 class="text-lg font-bold text-white">Inventário Aberto</h3>
+                            </div>
+                            <p class="text-gray-400 text-sm">Iniciado em: <span class="text-gray-200">{{ inventario_aberto.data_criacao }}</span></p>
+                            <p class="text-gray-500 text-xs mt-1">Estoquistas podem acessar os tablets.</p>
                         </div>
-                        <p class="text-gray-400 text-sm">Iniciado em: <span class="text-gray-200">{{ inventario_aberto.data_criacao }}</span></p>
-                        <p class="text-gray-500 text-xs mt-1">Estoquistas podem acessar os tablets.</p>
-                    </div>
-                    <div class="flex gap-2">
-                        <a href="{{ url_for('admin.exportar_csv') }}" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition">
-                            📥 CSV
-                        </a>
-                        <button onclick="abrirModalCancelar()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-lg flex items-center gap-2">
-                            ❌ Cancelar Sessão
-                        </button>
-                        <a href="{{ url_for('admin.preview_fechamento') }}" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-lg shadow-emerald-900/20 flex items-center gap-2">
-                            ✅ Concluir Sessão
-                        </a>
-                    </div>
-                </div>
-            {% else %}
-                <div class="absolute top-0 left-0 w-1 h-full bg-slate-600"></div>
-                <div class="flex flex-col h-full justify-center">
-                    <h3 class="text-lg font-bold text-gray-300 mb-4 flex items-center gap-2">
-                        🔒 Sistema Fechado
-                    </h3>
-                    <div class="grid grid-cols-2 gap-4">
-                        <button onclick="abrirModalInventario()" class="w-full h-full bg-emerald-600 hover:bg-emerald-500 text-white p-4 rounded-lg text-left transition group">
-                            <span class="block text-2xl mb-1 group-hover:scale-110 transition origin-left">✨</span>
-                            <span class="block font-bold">Iniciar nova contagem</span>
-                            <span class="text-xs opacity-70">Reseta contagens anteriores.</span>
-                        </button>
-                        <form action="{{ url_for('admin.recuperar_ultimo_inventario') }}" method="POST">
-                            <button class="w-full h-full bg-slate-700 hover:bg-slate-600 text-white p-4 rounded-lg text-left transition group">
-                                <span class="block text-2xl mb-1 group-hover:scale-110 transition origin-left">↩️</span>
-                                <span class="block font-bold">Recuperar</span>
-                                <span class="text-xs opacity-70">Continua de onde parou.</span>
+                        <div class="flex gap-2">
+                            <a href="{{ url_for('admin.exportar_csv') }}" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition">
+                                📥 CSV
+                            </a>
+                            <button onclick="abrirModalCancelar()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-lg flex items-center gap-2">
+                                ❌ Cancelar Sessão
                             </button>
-                        </form>
+                            <a href="{{ url_for('admin.preview_fechamento') }}" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-lg shadow-emerald-900/20 flex items-center gap-2">
+                                ✅ Concluir Sessão
+                            </a>
+                        </div>
                     </div>
-                </div>
-            {% endif %}
-        </div>
+                {% else %}
+                    <div class="absolute top-0 left-0 w-1 h-full bg-slate-600"></div>
+                    <div class="flex flex-col h-full justify-center">
+                        <h3 class="text-lg font-bold text-gray-300 mb-4 flex items-center gap-2">
+                            🔒 Sistema Fechado
+                        </h3>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <button onclick="abrirModalInventario()" class="w-full h-full bg-emerald-600 hover:bg-emerald-500 text-white p-4 rounded-lg text-left transition group">
+                                <span class="block text-2xl mb-1 group-hover:scale-110 transition origin-left">✨</span>
+                                <span class="block font-bold">Iniciar nova contagem</span>
+                                <span class="text-xs opacity-70">Reseta contagens anteriores.</span>
+                            </button>
+                            <form action="{{ url_for('admin.recuperar_ultimo_inventario') }}" method="POST">
+                                <button class="w-full h-full bg-slate-700 hover:bg-slate-600 text-white p-4 rounded-lg text-left transition group">
+                                    <span class="block text-2xl mb-1 group-hover:scale-110 transition origin-left">↩️</span>
+                                    <span class="block font-bold">Recuperar</span>
+                                    <span class="text-xs opacity-70">Continua de onde parou.</span>
+                                </button>
+                            </form>
+                        </div>
+                        
+                        
+                    </div>
+                {% endif %}
+            </div>
 
-    </div>
+        </div>
+    {% endif %}
 
     <!-- SEÇÃO: CONTROLE DE ESTOQUE -->
     <div class="border-t border-slate-800 pt-8 mb-8">
@@ -170,6 +175,7 @@
     </div>
 
     <!-- SEÇÃO: CADASTROS & CONFIGURAÇÕES -->
+    
     <div class="border-t border-slate-800 pt-8">
         <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
             <span class="w-2 h-6 bg-amber-500 rounded-full"></span> ⚙️ Cadastros & Configurações
@@ -183,56 +189,58 @@
                     <span class="block text-xs text-gray-500">CRUD cadastral</span>
                 </div>
             </a>
+            {% if not MODO_LEITURA %}
+                <a href="{{ url_for('admin.admin_categorias') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-amber-500 transition flex items-center gap-3 group">
+                    <span class="text-2xl group-hover:scale-110 transition">📂</span>
+                    <div class="text-left">
+                        <span class="block font-bold text-gray-200 text-sm">Categorias</span>
+                        <span class="block text-xs text-gray-500">Inventários parciais</span>
+                    </div>
+                </a>
 
-            <a href="{{ url_for('admin.admin_categorias') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-amber-500 transition flex items-center gap-3 group">
-                <span class="text-2xl group-hover:scale-110 transition">📂</span>
-                <div class="text-left">
-                    <span class="block font-bold text-gray-200 text-sm">Categorias</span>
-                    <span class="block text-xs text-gray-500">Inventários parciais</span>
-                </div>
-            </a>
+                <a href="{{ url_for('admin.admin_unidades') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
+                    <span class="text-2xl group-hover:scale-110 transition">📏</span>
+                    <div class="text-left">
+                        <span class="block font-bold text-gray-200 text-sm">Unidades</span>
+                        <span class="block text-xs text-gray-500">KG, CX, UN...</span>
+                    </div>
+                </a>
 
-            <a href="{{ url_for('admin.admin_unidades') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
-                <span class="text-2xl group-hover:scale-110 transition">📏</span>
-                <div class="text-left">
-                    <span class="block font-bold text-gray-200 text-sm">Unidades</span>
-                    <span class="block text-xs text-gray-500">KG, CX, UN...</span>
-                </div>
-            </a>
+                <a href="{{ url_for('admin.admin_setores') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
+                    <span class="text-2xl group-hover:scale-110 transition">🏗️</span>
+                    <div class="text-left">
+                        <span class="block font-bold text-gray-200 text-sm">Setores</span>
+                        <span class="block text-xs text-gray-500">Áreas físicas</span>
+                    </div>
+                </a>
 
-            <a href="{{ url_for('admin.admin_setores') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
-                <span class="text-2xl group-hover:scale-110 transition">🏗️</span>
-                <div class="text-left">
-                    <span class="block font-bold text-gray-200 text-sm">Setores</span>
-                    <span class="block text-xs text-gray-500">Áreas físicas</span>
-                </div>
-            </a>
+                <a href="{{ url_for('admin.admin_locais') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
+                    <span class="text-2xl group-hover:scale-110 transition">📍</span>
+                    <div class="text-left">
+                        <span class="block font-bold text-gray-200 text-sm">Locais</span>
+                        <span class="block text-xs text-gray-500">Móveis e freezers</span>
+                    </div>
+                </a>
 
-            <a href="{{ url_for('admin.admin_locais') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
-                <span class="text-2xl group-hover:scale-110 transition">📍</span>
-                <div class="text-left">
-                    <span class="block font-bold text-gray-200 text-sm">Locais</span>
-                    <span class="block text-xs text-gray-500">Móveis e freezers</span>
-                </div>
-            </a>
+                <a href="{{ url_for('admin.admin_usuarios') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
+                    <span class="text-2xl group-hover:scale-110 transition">👥</span>
+                    <div class="text-left">
+                        <span class="block font-bold text-gray-200 text-sm">Usuários</span>
+                        <span class="block text-xs text-gray-500">Equipe</span>
+                    </div>
+                </a>
 
-            <a href="{{ url_for('admin.admin_usuarios') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
-                <span class="text-2xl group-hover:scale-110 transition">👥</span>
-                <div class="text-left">
-                    <span class="block font-bold text-gray-200 text-sm">Usuários</span>
-                    <span class="block text-xs text-gray-500">Equipe</span>
-                </div>
-            </a>
-
-            <a href="{{ url_for('admin.upload_erp') }}" class="bg-slate-800 hover:bg-blue-900/20 p-4 rounded-lg border border-slate-700/50 hover:border-blue-500 transition flex items-center gap-3 group">
-                <span class="text-2xl group-hover:scale-110 transition">📥</span>
-                <div class="text-left">
-                    <span class="block font-bold text-gray-200 text-sm">Importar ERP</span>
-                    <span class="block text-xs text-gray-500">Atualizar produtos</span>
-                </div>
-            </a>
+                <a href="{{ url_for('admin.upload_erp') }}" class="bg-slate-800 hover:bg-blue-900/20 p-4 rounded-lg border border-slate-700/50 hover:border-blue-500 transition flex items-center gap-3 group">
+                    <span class="text-2xl group-hover:scale-110 transition">📥</span>
+                    <div class="text-left">
+                        <span class="block font-bold text-gray-200 text-sm">Importar ERP</span>
+                        <span class="block text-xs text-gray-500">Atualizar produtos</span>
+                    </div>
+                </a>
+            {% endif %}
         </div>
     </div>
+    
 
 </div>
 
