@@ -3,6 +3,15 @@
 {% block title %}Contagem - {{ local.nome }}{% endblock %}
 
 {% block content %}
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex items-center justify-center">
+    <div class="text-center">
+        <div class="animate-spin rounded-full h-20 w-20 border-4 border-amber-500 border-t-transparent mx-auto mb-4"></div>
+        <p class="text-white text-2xl font-bold">CARREGANDO...</p>
+        <p class="text-gray-400 text-sm mt-2">Aguarde enquanto atualizamos a página</p>
+    </div>
+</div>
+
 <!-- Barra de Status (Offline/Sync) -->
 <div id="statusBar" class="fixed top-0 left-0 right-0 z-50 h-10 bg-green-600 text-white text-center text-sm font-semibold px-4 py-2 transition-all duration-300 hidden">
   <span id="statusText">Tudo OK</span>
@@ -1807,6 +1816,25 @@ window.sincronizarFila = async function sincronizarFila() {
     sincronizandoAtualmente = false;
     atualizarStatusBar();
 };
+
+// ============================================
+// CONTROLE DO LOADING OVERLAY
+// ============================================
+window.addEventListener('load', function() {
+    // Esconde o overlay quando a página terminar de carregar completamente
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+});
+
+window.addEventListener('beforeunload', function() {
+    // Mostra o overlay quando a página está sendo recarregada/saindo
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.style.display = 'flex';
+    }
+});
 </script>
 {% endblock %}
 
