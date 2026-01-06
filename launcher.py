@@ -5,6 +5,7 @@ import socket
 import webbrowser
 import time
 import atexit
+import signal
 from datetime import datetime
 from threading import Timer
 from dotenv import load_dotenv
@@ -124,6 +125,27 @@ def validar_configuracao():
     
     return perfil, caminho_drive
 
+def finalizar_sistema(signum=None, frame=None):
+    """
+    Função chamada ao encerrar o sistema.
+    Exporta backup para o Google Drive se o perfil for LOJA ou CADASTRO.
+    """
+    print("\n" + "="*60)
+    print("🛑 ENCERRANDO SISTEMA...")
+    print("="*60)
+    
+    perfil = os.getenv('PERFIL_MAQUINA', '').strip().upper()
+    caminho_drive = os.getenv('CAMINHO_GOOGLE_DRIVE', '').strip()
+    
+    if perfil in ['LOJA', 'CADASTRO'] and caminho_drive:
+        print(f"\n📤 Exportando backup final para o Google Drive...")
+        exportar_para_nuvem(caminho_drive)
+        print("✅ Backup final concluído!")
+    
+    print("\n👋 Sistema encerrado com sucesso!")
+    print("="*60 + "\n")
+    sys.exit(0)
+
 if __name__ == "__main__":
     print("="*60)
     print("🥐 SISTEMA DE ESTOQUE - INICIANDO")
@@ -140,9 +162,18 @@ if __name__ == "__main__":
         # Computador da LOJA/CADASTRO: Exporta para a nuvem ao iniciar
         exportar_para_nuvem(CAMINHO_DRIVE)
         
-        # Registra função para exportar novamente ao fechar o sistema
-        atexit.register(lambda: exportar_para_nuvem(CAMINHO_DRIVE))
-        print("💾 Backup automático configurado para ao fechar o sistema.\n")
+        # Registra função para exportar ao fechar o sistema
+        # atexit: Para encerramento normal (Ctrl+C, sys.exit, etc)
+        atexit.register(finalizar_sistema)
+        
+        # signal: Para capturar Ctrl+C e fechamento de janela no Windows
+        signal.signal(signal.SIGINT, finalizar_sistema)  # Ctrl+C
+        signal.signal(signal.SIGTERM, finalizar_sistema)  # Encerramento do sistema
+        
+        print("💾 Backup automático configurado para ao fechar o sistema.")
+        print("   ✓ Ao pressionar Ctrl+C")
+        print("   ✓ Ao fechar a janela do terminal")
+        print("   ✓ Ao encerrar o programa\n")
         
     elif PERFIL == 'GERENTE':
         # Computador do GERENTE: Sincroniza (baixa) da nuvem
