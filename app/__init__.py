@@ -48,12 +48,14 @@ def create_app(config_object=None):
     from .blueprints.admin import bp as admin_bp
     from .blueprints.relatorios import bp as relatorios_bp
     from .blueprints.api import bp as api_bp
+    from .blueprints.lotes import bp as lotes_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(estoque_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(relatorios_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(lotes_bp)
 
     # Error handlers
     @app.errorhandler(404)

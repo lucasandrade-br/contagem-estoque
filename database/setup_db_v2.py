@@ -173,6 +173,40 @@ def criar_tabelas(conn):
         ON produtos(controla_estoque) WHERE ativo = 1
     ''')
     
+    print("\n🆕 Criando tabela ESTOQUE_SALDOS (Controle multi-nível: Central/Setor/Local)...")
+    
+    # Tabela para controle de saldo por localização (CENTRAL, SETOR ou LOCAL)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS estoque_saldos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            produto_id INTEGER NOT NULL,
+            setor_id INTEGER,
+            local_id INTEGER,
+            saldo REAL NOT NULL DEFAULT 0.0,
+            FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE,
+            FOREIGN KEY (setor_id) REFERENCES setores(id) ON DELETE CASCADE,
+            FOREIGN KEY (local_id) REFERENCES locais(id) ON DELETE CASCADE,
+            UNIQUE(produto_id, setor_id, local_id)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_estoque_saldos_produto 
+        ON estoque_saldos(produto_id)
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_estoque_saldos_setor 
+        ON estoque_saldos(setor_id)
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_estoque_saldos_local 
+        ON estoque_saldos(local_id)
+    ''')
+    
+    print("✓ Tabela estoque_saldos criada")
+    
     # 5b. Tabela de relacionamento produtos_unidades (N:N) com fator de conversão
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS produtos_unidades (
@@ -239,8 +273,19 @@ def criar_tabelas(conn):
             origem TEXT,
             id_usuario INTEGER,
             observacao TEXT,
+            
+            -- Localização (origem/destino para rastreabilidade)
+            setor_origem_id INTEGER,
+            local_origem_id INTEGER,
+            setor_destino_id INTEGER,
+            local_destino_id INTEGER,
+            
             FOREIGN KEY (id_produto) REFERENCES produtos(id) ON DELETE CASCADE,
-            FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE SET NULL
+            FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE SET NULL,
+            FOREIGN KEY (setor_origem_id) REFERENCES setores(id),
+            FOREIGN KEY (local_origem_id) REFERENCES locais(id),
+            FOREIGN KEY (setor_destino_id) REFERENCES setores(id),
+            FOREIGN KEY (local_destino_id) REFERENCES locais(id)
         )
     ''')
     
@@ -313,6 +358,90 @@ def criar_tabelas(conn):
     cursor.execute('''
         CREATE INDEX IF NOT EXISTS idx_ocorrencias_resolvido 
         ON ocorrencias(resolvido, id_inventario)
+    ''')
+    
+    print("\n🆕 Criando tabelas LOTES DE MOVIMENTAÇÃO (Entrada/Saída/Transferência em massa)...")
+    
+    # 10. Tabela lotes_movimentacao (Movimentações em lote com workflow de aprovação)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS lotes_movimentacao (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL CHECK(tipo IN ('ENTRADA','SAIDA','TRANSFERENCIA')),
+            motivo TEXT NOT NULL,
+            setor_origem_id INTEGER,
+            local_origem_id INTEGER,
+            setor_destino_id INTEGER,
+            local_destino_id INTEGER,
+            origem TEXT,
+            observacao TEXT,
+            status TEXT NOT NULL DEFAULT 'RASCUNHO' CHECK(status IN ('RASCUNHO','FINALIZADO','PENDENTE_APROVACAO','APROVADO','REJEITADO')),
+            id_usuario INTEGER NOT NULL,
+            data_criacao TEXT,
+            data_finalizacao TEXT,
+            valor_total_estimado REAL,
+            id_usuario_aprovador INTEGER,
+            data_aprovacao DATETIME,
+            motivo_rejeicao TEXT,
+            
+            FOREIGN KEY (setor_origem_id) REFERENCES setores(id),
+            FOREIGN KEY (local_origem_id) REFERENCES locais(id),
+            FOREIGN KEY (setor_destino_id) REFERENCES setores(id),
+            FOREIGN KEY (local_destino_id) REFERENCES locais(id),
+            FOREIGN KEY (id_usuario) REFERENCES usuarios(id),
+            FOREIGN KEY (id_usuario_aprovador) REFERENCES usuarios(id)
+        )
+    ''')
+    
+    # Índices para performance
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_lotes_status 
+        ON lotes_movimentacao(status)
+    ''')
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_lotes_tipo 
+        ON lotes_movimentacao(tipo)
+    ''')
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_lotes_usuario 
+        ON lotes_movimentacao(id_usuario)
+    ''')
+    
+    # 11. Tabela lotes_movimentacao_itens (Itens de cada lote)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS lotes_movimentacao_itens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_lote INTEGER NOT NULL,
+            id_produto INTEGER NOT NULL,
+            quantidade_original REAL NOT NULL,
+            unidade_movimentacao TEXT NOT NULL,
+            fator_conversao REAL NOT NULL DEFAULT 1.0,
+            preco_custo_unitario REAL,
+            observacao TEXT,
+            created_at TEXT,
+            
+            FOREIGN KEY (id_lote) REFERENCES lotes_movimentacao(id) ON DELETE CASCADE,
+            FOREIGN KEY (id_produto) REFERENCES produtos(id)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_lotes_itens_lote 
+        ON lotes_movimentacao_itens(id_lote)
+    ''')
+    
+    # View para lotes pendentes de aprovação
+    cursor.execute('''
+        CREATE VIEW IF NOT EXISTS v_lotes_pendentes AS
+        SELECT 
+            l.*,
+            u.nome as usuario_nome,
+            COUNT(i.id) as total_itens,
+            SUM(i.quantidade_original * i.fator_conversao * COALESCE(i.preco_custo_unitario, 0)) as valor_total
+        FROM lotes_movimentacao l
+        LEFT JOIN usuarios u ON l.id_usuario = u.id
+        LEFT JOIN lotes_movimentacao_itens i ON l.id = i.id_lote
+        WHERE l.status = 'PENDENTE_APROVACAO'
+        GROUP BY l.id
     ''')
     
     conn.commit()

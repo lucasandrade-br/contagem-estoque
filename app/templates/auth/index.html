@@ -1,55 +1,117 @@
 {% extends "base.html" %}
 
-{% block title %}Seleção de Usuário - Contagem de Estoque{% endblock %}
+{% block title %}Sistema de Gestão de Estoque{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-center h-screen relative">
+<div class="min-h-screen py-8 px-4 relative">
     <!-- Botão Área do Gerente -->
     <a href="{{ url_for('auth.login_admin') }}" 
-       class="absolute top-4 right-4 text-amber-500 hover:text-amber-400 transition-colors text-sm font-medium flex items-center gap-2">
+       class="absolute top-4 right-4 text-amber-500 hover:text-amber-400 transition-colors text-sm font-medium flex items-center gap-2 z-50">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
         </svg>
         Área do Gerente
     </a>
     
-    <div class="bg-slate-800 p-8 rounded-xl shadow-2xl max-w-md w-full">
-        <!-- Título -->
-        <h1 class="text-4xl font-bold text-amber-500 text-center mb-2">
-            Contagem de Estoque
+    <div class="max-w-4xl mx-auto mt-12">
+        <!-- Título Principal -->
+        <h1 class="text-4xl font-bold text-amber-500 text-center mb-8">
+            Sistema de Gestão de Estoque
         </h1>
         
-        <!-- Subtítulo -->
-        <p class="text-gray-400 text-center mb-8">
-            Quem é você?
-        </p>
-        
-        <!-- Lista de Usuários (apenas Estoquistas) -->
-        <div class="space-y-3">
-            {% for usuario in usuarios %}
-                {% if usuario.funcao != 'Gerente' %}
-                <a href="{{ url_for('auth.selecionar_usuario', user_id=usuario.id) }}" 
-                   class="w-full block p-4 mb-3 rounded-lg bg-slate-700 hover:bg-amber-500 text-gray-100 hover:text-slate-900 transition-all duration-300 text-center font-medium">
-                    {{ usuario.nome }}
-                    <span class="block text-sm mt-1 opacity-75">
-                        {{ usuario.funcao }}
-                    </span>
-                </a>
-                {% endif %}
-            {% endfor %}
+        <!-- Grid de Seções -->
+        <div class="grid grid-cols-1 md:grid-cols-1 gap-6">
+            
+            <!-- SEÇÃO: CONTAGEM (Condicional - só se inventário aberto) -->
+            {% if inventario_aberto %}
+            <div class="bg-slate-800 p-6 rounded-xl shadow-2xl border-2 border-blue-500/30">
+                <div class="flex items-center gap-3 mb-4">
+                    <span class="text-4xl">📦</span>
+                    <div>
+                        <h2 class="text-2xl font-bold text-blue-400">Contagem de Estoque</h2>
+                        <p class="text-gray-400 text-sm">Inventário ativo</p>
+                    </div>
+                </div>
+                
+                <p class="text-gray-300 text-sm mb-4">
+                    Selecione quem está fazendo a contagem:
+                </p>
+                
+                <!-- Lista de Usuários para Contagem -->
+                <div class="space-y-2">
+                    {% for usuario in usuarios %}
+                        {% if usuario.funcao != 'Gerente' %}
+                        <a href="{{ url_for('auth.selecionar_usuario', user_id=usuario.id) }}" 
+                           class="block p-3 rounded-lg bg-slate-700 hover:bg-blue-500 text-gray-100 hover:text-white transition-all duration-300 text-center font-medium">
+                            {{ usuario.nome }}
+                            <span class="block text-xs mt-1 opacity-75">{{ usuario.funcao }}</span>
+                        </a>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- SEÇÃO: MOVIMENTAÇÃO (Sempre visível) -->
+            <div class="bg-slate-800 p-6 rounded-xl shadow-2xl border-2 border-amber-500/30">
+                <div class="flex items-center gap-3 mb-4">
+                    <span class="text-4xl">🔄</span>
+                    <div>
+                        <h2 class="text-2xl font-bold text-amber-400">Movimentação</h2>
+                        <p class="text-gray-400 text-sm">Entradas, saídas e transferências</p>
+                    </div>
+                </div>
+                                
+                <!-- Botão para abrir modal de seleção -->
+                <button onclick="abrirModalMovimentacao()" 
+                        class="w-full p-4 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-lg transition-all duration-300 flex items-center justify-center gap-2">
+                    <span class="text-2xl">+</span>
+                    Nova Movimentação
+                </button>
+            </div>
+            
         </div>
     </div>
 </div>
 
 <!-- Floating QR button -->
-<button onclick="openQrModal()" class="fixed right-6 bottom-6 bg-amber-500 hover:bg-amber-400 text-slate-900 px-4 py-3 rounded-full shadow-lg flex items-center gap-2 z-40">
+<button onclick="openQrModal()" 
+        class="fixed right-6 bottom-6 bg-amber-500 hover:bg-amber-400 text-slate-900 px-4 py-3 rounded-full shadow-lg flex items-center gap-2 z-40">
     <span>🔗</span>
     <span class="text-sm font-bold">Compartilhar Acesso</span>
 </button>
 
-<!-- QR Modal (index) -->
+<!-- Modal: Seleção de Usuário para Movimentação -->
+<div id="modal-movimentacao" class="fixed inset-0 hidden items-center justify-center bg-black/70 z-50">
+    <div class="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-amber-500">Quem está fazendo a movimentação?</h3>
+            <button onclick="fecharModalMovimentacao()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+        </div>
+        
+        <p class="text-gray-300 text-sm mb-4">Selecione o usuário responsável por esta operação:</p>
+        
+        <!-- Lista de Todos os Usuários -->
+        <div class="space-y-2 max-h-96 overflow-y-auto">
+            {% for usuario in usuarios %}
+            <a href="{{ url_for('auth.selecionar_usuario_movimentacao', user_id=usuario.id) }}" 
+               class="block p-3 rounded-lg bg-slate-700 hover:bg-amber-600 text-gray-100 hover:text-white transition-all duration-300 text-center font-medium">
+                {{ usuario.nome }}
+                <span class="block text-xs mt-1 opacity-75">{{ usuario.funcao }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        
+        <button onclick="fecharModalMovimentacao()" 
+                class="mt-4 w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-gray-100 rounded-lg transition-colors">
+            Cancelar
+        </button>
+    </div>
+</div>
+
+<!-- Modal: QR Code -->
 <div id="qr-modal" class="fixed inset-0 hidden items-center justify-center bg-black/60 z-50">
-    <div class="bg-slate-800 rounded-lg p-6 max-w-sm w-full text-center">
+    <div class="bg-slate-800 rounded-lg p-6 max-w-sm w-full text-center mx-4">
         <h3 class="text-lg font-bold text-gray-100 mb-4">Compartilhar Acesso</h3>
         <div class="flex justify-center mb-4">
             <img src="{{ url_for('admin.gerar_qrcode') }}" alt="QR Code" class="w-64 h-64 object-contain" />
@@ -60,15 +122,27 @@
 </div>
 
 <script>
-function openQrModal(){
+// Modal Movimentação
+function abrirModalMovimentacao() {
+    document.getElementById('modal-movimentacao').classList.remove('hidden');
+    document.getElementById('modal-movimentacao').classList.add('flex');
+}
+
+function fecharModalMovimentacao() {
+    document.getElementById('modal-movimentacao').classList.remove('flex');
+    document.getElementById('modal-movimentacao').classList.add('hidden');
+}
+
+// Modal QR Code
+function openQrModal() {
     document.getElementById('qr-modal').classList.remove('hidden');
     document.getElementById('qr-modal').classList.add('flex');
 }
-function closeQrModal(){
+
+function closeQrModal() {
     document.getElementById('qr-modal').classList.remove('flex');
     document.getElementById('qr-modal').classList.add('hidden');
 }
 </script>
-</div>
 {% endblock %}
 

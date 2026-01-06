@@ -192,3 +192,236 @@ def registrar_movimento(db, produto_id, tipo, quantidade_original, motivo,
     
     return movimentacao_id
 
+
+def obter_nivel_controle(db):
+    """
+    Retorna o nível de controle de estoque configurado.
+    Prioridade: 1º .env, 2º banco de dados.
+    
+    Returns:
+        str: 'CENTRAL', 'SETOR' ou 'LOCAL'
+    """
+    from dotenv import load_dotenv
+    import os
+    
+    # 1º: Tentar ler do .env (permite configurar por instalação)
+    load_dotenv()
+    nivel_env = os.getenv('NIVEL_CONTROLE_ESTOQUE', '').strip().upper()
+    
+    if nivel_env in ['CENTRAL', 'SETOR', 'LOCAL']:
+        return nivel_env
+    
+    # 2º: Fallback para banco de dados
+    config = db.execute(
+        "SELECT valor FROM configs WHERE chave = 'NIVEL_CONTROLE_ESTOQUE'"
+    ).fetchone()
+    
+    return config['valor'].upper() if config else 'CENTRAL'
+
+
+def obter_saldo(db, produto_id, setor_id=None, local_id=None):
+    """
+    Obtém o saldo de um produto conforme o nível de controle.
+    
+    Args:
+        db: Conexão com banco de dados
+        produto_id: ID do produto
+        setor_id: ID do setor (obrigatório se nível = SETOR ou LOCAL)
+        local_id: ID do local (obrigatório se nível = LOCAL)
+    
+    Returns:
+        float: Saldo disponível
+    """
+    nivel = obter_nivel_controle(db)
+    
+    if nivel == 'CENTRAL':
+        # Modo legado: consultar produtos.estoque_atual
+        produto = db.execute(
+            'SELECT estoque_atual FROM produtos WHERE id = ?',
+            (produto_id,)
+        ).fetchone()
+        return float(produto['estoque_atual'] or 0) if produto else 0.0
+    
+    elif nivel == 'SETOR':
+        # Saldo por setor
+        saldo_row = db.execute('''
+            SELECT saldo FROM estoque_saldos 
+            WHERE produto_id = ? AND setor_id = ? AND local_id IS NULL
+        ''', (produto_id, setor_id)).fetchone()
+        return float(saldo_row['saldo']) if saldo_row else 0.0
+    
+    elif nivel == 'LOCAL':
+        # Saldo por local específico
+        saldo_row = db.execute('''
+            SELECT saldo FROM estoque_saldos 
+            WHERE produto_id = ? AND setor_id = ? AND local_id = ?
+        ''', (produto_id, setor_id, local_id)).fetchone()
+        return float(saldo_row['saldo']) if saldo_row else 0.0
+    
+    return 0.0
+
+
+def ajustar_saldo(db, produto_id, quantidade_convertida, tipo, 
+                  setor_id=None, local_id=None):
+    """
+    Ajusta o saldo de um produto conforme o nível de controle.
+    
+    Args:
+        db: Conexão com banco de dados
+        produto_id: ID do produto
+        quantidade_convertida: Quantidade em unidade padrão (positiva)
+        tipo: 'ENTRADA', 'SAIDA' ou 'TRANSFERENCIA'
+        setor_id: ID do setor
+        local_id: ID do local
+    """
+    nivel = obter_nivel_controle(db)
+    
+    if nivel == 'CENTRAL':
+        # Modo legado: atualizar produtos.estoque_atual
+        if tipo == 'ENTRADA':
+            db.execute('''
+                UPDATE produtos 
+                SET estoque_atual = estoque_atual + ? 
+                WHERE id = ?
+            ''', (quantidade_convertida, produto_id))
+        elif tipo == 'SAIDA':
+            db.execute('''
+                UPDATE produtos 
+                SET estoque_atual = estoque_atual - ? 
+                WHERE id = ?
+            ''', (quantidade_convertida, produto_id))
+        # TRANSFERENCIA não se aplica no modo CENTRAL
+    
+    elif nivel == 'SETOR':
+        # Ajustar saldo por setor
+        if tipo == 'ENTRADA':
+            _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
+                                 setor_id, None, incremento=True)
+        elif tipo == 'SAIDA':
+            _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
+                                 setor_id, None, incremento=False)
+    
+    elif nivel == 'LOCAL':
+        # Ajustar saldo por local
+        if tipo == 'ENTRADA':
+            _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
+                                 setor_id, local_id, incremento=True)
+        elif tipo == 'SAIDA':
+            _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
+                                 setor_id, local_id, incremento=False)
+
+
+def _ajustar_saldo_tabela(db, produto_id, quantidade, setor_id, local_id, incremento=True):
+    """
+    Ajusta saldo na tabela estoque_saldos (UPSERT).
+    
+    Args:
+        incremento: True para adicionar, False para subtrair
+    """
+    operacao = '+' if incremento else '-'
+    
+    # Verificar se registro existe
+    existe = db.execute('''
+        SELECT id FROM estoque_saldos 
+        WHERE produto_id = ? AND setor_id = ? AND local_id IS ?
+    ''', (produto_id, setor_id, local_id)).fetchone()
+    
+    if existe:
+        # UPDATE
+        db.execute(f'''
+            UPDATE estoque_saldos 
+            SET saldo = saldo {operacao} ? 
+            WHERE produto_id = ? AND setor_id = ? AND local_id IS ?
+        ''', (quantidade, produto_id, setor_id, local_id))
+    else:
+        # INSERT
+        novo_saldo = quantidade if incremento else -quantidade
+        db.execute('''
+            INSERT INTO estoque_saldos (produto_id, setor_id, local_id, saldo)
+            VALUES (?, ?, ?, ?)
+        ''', (produto_id, setor_id, local_id, novo_saldo))
+
+
+def validar_localizacao(db, tipo, setor_origem_id=None, local_origem_id=None,
+                       setor_destino_id=None, local_destino_id=None):
+    """
+    Valida campos de localização conforme nível de controle e tipo de movimentação.
+    
+    Returns:
+        tuple: (valido: bool, mensagem_erro: str)
+    """
+    nivel = obter_nivel_controle(db)
+    
+    if nivel == 'CENTRAL':
+        # Não deve ter localização
+        if any([setor_origem_id, local_origem_id, setor_destino_id, local_destino_id]):
+            return False, "Modo CENTRAL não aceita localização"
+        return True, None
+    
+    elif nivel == 'SETOR':
+        if tipo == 'ENTRADA':
+            if not setor_destino_id:
+                return False, "Modo SETOR: ENTRADA requer setor de destino"
+            if local_destino_id:
+                return False, "Modo SETOR não aceita locais específicos"
+        
+        elif tipo == 'SAIDA':
+            if not setor_origem_id:
+                return False, "Modo SETOR: SAÍDA requer setor de origem"
+            if local_origem_id:
+                return False, "Modo SETOR não aceita locais específicos"
+        
+        elif tipo == 'TRANSFERENCIA':
+            if not setor_origem_id or not setor_destino_id:
+                return False, "Modo SETOR: TRANSFERÊNCIA requer setor de origem e destino"
+            if setor_origem_id == setor_destino_id:
+                return False, "Origem e destino devem ser diferentes"
+            if local_origem_id or local_destino_id:
+                return False, "Modo SETOR não aceita locais específicos"
+    
+    elif nivel == 'LOCAL':
+        if tipo == 'ENTRADA':
+            if not setor_destino_id or not local_destino_id:
+                return False, "Modo LOCAL: ENTRADA requer setor e local de destino"
+        
+        elif tipo == 'SAIDA':
+            if not setor_origem_id or not local_origem_id:
+                return False, "Modo LOCAL: SAÍDA requer setor e local de origem"
+        
+        elif tipo == 'TRANSFERENCIA':
+            if not all([setor_origem_id, local_origem_id, setor_destino_id, local_destino_id]):
+                return False, "Modo LOCAL: TRANSFERÊNCIA requer setor e local de origem e destino"
+            if setor_origem_id == setor_destino_id and local_origem_id == local_destino_id:
+                return False, "Origem e destino devem ser diferentes"
+    
+    return True, None
+
+
+def obter_requer_aprovacao(db):
+    """
+    Retorna se movimentações requerem aprovação de gerente.
+    Prioridade: 1º .env, 2º banco de dados, 3º default=1 (sim).
+    
+    Returns:
+        int: 0 (não requer/direto) ou 1 (requer aprovação)
+    """
+    from dotenv import load_dotenv
+    import os
+    
+    # 1º: Tentar ler do .env (permite configurar por instalação)
+    load_dotenv()
+    requer_env = os.getenv('REQUER_APROVACAO_MOVIMENTACAO', '').strip()
+    
+    if requer_env in ['0', '1']:
+        return int(requer_env)
+    
+    # 2º: Fallback para banco de dados
+    config = db.execute(
+        "SELECT valor FROM configs WHERE chave = 'REQUER_APROVACAO_MOVIMENTACAO'"
+    ).fetchone()
+    
+    if config:
+        return int(config['valor'])
+    
+    # 3º: Default = 1 (requer aprovação por segurança)
+    return 1

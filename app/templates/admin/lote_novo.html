@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}Novo Lote de Movimentação{% endblock %}
+
+{% block content %}
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex items-center justify-center hidden">
+    <div class="text-center">
+        <div class="animate-spin rounded-full h-20 w-20 border-4 border-amber-500 border-t-transparent mx-auto mb-4"></div>
+        <p class="text-white text-2xl font-bold">PROCESSANDO...</p>
+    </div>
+</div>
+
+<div class="max-w-4xl mx-auto px-4 py-6">
+    <!-- Header -->
+    <div class="sticky top-0 z-40 bg-slate-900 py-4 mb-4 flex items-center justify-between border-b border-slate-700">
+        <div class="flex items-center gap-3">
+            <a href="{{ url_for('admin.movimentacoes') }}" 
+               class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition text-gray-300 hover:text-white">
+                ← 
+            </a>
+            <h1 class="text-2xl font-bold text-amber-500">Nova Movimentação</h1>
+        </div>
+    </div>
+
+    <!-- Card: Dados do Lote (Ajuste 5) -->
+    <div class="bg-slate-800 rounded-lg p-3 mb-4 border border-slate-700">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div>
+                <span class="text-gray-400">Lote:</span>
+                <span id="display-lote-id" class="font-bold text-amber-500 ml-2">-</span>
+            </div>
+            <div>
+                <span class="text-gray-400">Tipo:</span>
+                <span id="display-tipo" class="font-bold text-white ml-2">-</span>
+            </div>
+            <div>
+                <span class="text-gray-400">Nível:</span>
+                <span id="display-nivel" class="font-bold text-purple-400 ml-2">-</span>
+            </div>
+            <div>
+                <span class="text-gray-400">Status:</span>
+                <span id="display-status" class="font-bold text-yellow-400 ml-2">RASCUNHO</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário do Cabeçalho -->
+    <div class="bg-slate-800 rounded-lg p-4 mb-4 border border-slate-700">
+        <form id="form-cabecalho">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <!-- Tipo -->
+                <div>
+                    <label class="block text-gray-300 font-semibold mb-2 text-sm">
+                        Tipo <span class="text-red-500">*</span>
+                    </label>
+                    <select id="tipo" name="tipo" required 
+                            class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <option value="">Selecione...</option>
+                        <option value="ENTRADA">ENTRADA</option>
+                        <option value="SAIDA">SAÍDA</option>
+                        <option value="TRANSFERENCIA">TRANSFERÊNCIA</option>
+                    </select>
+                </div>
+
+                <!-- Motivo (Ajuste 1) -->
+                <div>
+                    <label class="block text-gray-300 font-semibold mb-2 text-sm">
+                        Motivo <span class="text-red-500">*</span>
+                    </label>
+                    <select id="motivo" name="motivo" required
+                            class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <option value="">Selecione...</option>
+                        <!-- Opções serão preenchidas dinamicamente por JS baseado no tipo -->
+                    </select>
+                </div>
+
+                <!-- Campos de Localização (renderizados dinamicamente) -->
+                <div id="campos-localizacao" class="col-span-1 sm:col-span-2">
+                    <!-- Será preenchido via JavaScript -->
+                </div>
+            </div>
+            
+            <button type="submit" 
+                    class="mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition">
+                INICIAR LOTE
+            </button>
+        </form>
+    </div>
+
+    <!-- Seção: Busca de Produto (Ajuste 2 - otimizada) -->
+    <div id="secao-busca" class="hidden bg-slate-800 rounded-lg p-4 mb-4 border border-slate-700">
+        <div class="relative">
+            <input type="text" 
+                   id="busca-produto" 
+                   placeholder="Bipe o código ou digite o nome..."
+                   class="w-full p-4 pr-12 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-lg">
+            
+            <button type="button" 
+                    id="btn-limpar-busca"
+                    onclick="limparBusca()"
+                    title="Limpar busca"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-white hover:bg-slate-600 rounded-lg transition-colors hidden">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+            
+            <!-- Resultados da Busca -->
+            <div id="resultados-busca" 
+                 class="hidden absolute z-10 w-full mt-2 bg-slate-700 rounded-lg shadow-xl border border-slate-600 max-h-96 overflow-y-auto">
+            </div>
+        </div>
+    </div>
+
+    <!-- Seção: Tabela de Itens -->
+    <div id="secao-itens" class="hidden bg-slate-800 rounded-lg p-4 mb-4 border border-slate-700">
+        <h2 class="text-lg font-bold text-gray-100 mb-3">Itens do Lote</h2>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-700">
+                        <th class="text-left text-gray-400 py-2">Produto</th>
+                        <th class="text-right text-gray-400 py-2">Quantidade</th>
+                        <th class="text-right text-gray-400 py-2">Preço</th>
+                        <th class="text-right text-gray-400 py-2">Subtotal</th>
+                        <th class="text-right text-gray-400 py-2">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-itens" class="text-gray-300">
+                    <!-- Itens serão inseridos via JS -->
+                </tbody>
+                <tfoot>
+                    <tr class="border-t border-slate-700 font-bold">
+                        <td colspan="4" class="text-right py-2 text-gray-400">TOTAL:</td>
+                        <td class="text-right py-2 text-amber-500" id="valor-total">R$ 0,00</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        
+        <button type="button" 
+                onclick="finalizarLote()"
+                class="mt-4 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition">
+            ✓ FINALIZAR LOTE
+        </button>
+    </div>
+</div>
+
+<!-- Modal: Adicionar Item (Ajustes 2, 3 e 4) -->
+<div id="modal-adicionar-item" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div class="bg-slate-800 rounded-xl p-6 w-full mx-auto shadow-2xl max-h-[90vh] overflow-y-auto" style="max-width: 500px;">
+        <div class="flex items-center justify-between mb-4">
+            <h2 id="modal-produto-nome" class="text-xl font-bold text-amber-500"></h2>
+            <button type="button" onclick="fecharModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+        </div>
+        
+        <div class="text-sm text-gray-400 mb-4">
+            <p><strong>ERP:</strong> <span id="modal-produto-erp"></span> | <strong>GTIN:</strong> <span id="modal-produto-gtin"></span></p>
+            <p><strong>Estoque:</strong> <span id="modal-produto-estoque"></span></p>
+        </div>
+
+        <form id="form-adicionar-item" class="space-y-4">
+            <input type="hidden" id="modal-produto-id">
+            <!-- Select Unidade (Ajuste 4) -->
+            <div>
+                <label for="modal-unidade" class="block text-gray-300 mb-2 font-semibold">Unidade</label>
+                <select id="modal-unidade" 
+                        required
+                        class="w-full text-lg p-4 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <option value="">Carregando...</option>
+                </select>
+            </div>
+            <!-- Input Quantidade (readonly para usar apenas teclado customizado) -->
+            <div>
+                <label for="modal-quantidade" class="block text-gray-300 mb-2 font-semibold">Quantidade</label>
+                <input type="text" 
+                       id="modal-quantidade" 
+                       readonly
+                       required
+                       placeholder="Use o teclado abaixo"
+                       class="w-full text-3xl p-4 bg-slate-700 text-gray-100 rounded-lg text-center font-bold cursor-default focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <!-- Conversão em tempo real -->
+                <div id="conversao-unidade" class="text-center text-2xl mt-2 min-h-[2rem]"></div>
+            </div>
+            
+            <!-- Teclado Numérico Customizado (Ajuste 2) -->
+            <div id="teclado-numerico" class="bg-slate-700/50 rounded-lg p-3">
+                <div class="grid grid-cols-3 gap-2">
+                    <!-- Linha 1: 7 8 9 -->
+                    <button type="button" onclick="digitarNumero('7')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">7</button>
+                    <button type="button" onclick="digitarNumero('8')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">8</button>
+                    <button type="button" onclick="digitarNumero('9')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">9</button>
+                    
+                    <!-- Linha 2: 4 5 6 -->
+                    <button type="button" onclick="digitarNumero('4')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">4</button>
+                    <button type="button" onclick="digitarNumero('5')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">5</button>
+                    <button type="button" onclick="digitarNumero('6')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">6</button>
+                    
+                    <!-- Linha 3: 1 2 3 -->
+                    <button type="button" onclick="digitarNumero('1')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">1</button>
+                    <button type="button" onclick="digitarNumero('2')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">2</button>
+                    <button type="button" onclick="digitarNumero('3')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">3</button>
+                    
+                    <!-- Linha 4: . 0 ← -->
+                    <button type="button" onclick="digitarNumero('.')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">.</button>
+                    <button type="button" onclick="digitarNumero('0')" class="bg-slate-600 hover:bg-slate-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-slate-400">0</button>
+                    <button type="button" onclick="apagarDigito()" class="bg-red-600 hover:bg-red-500 text-white text-2xl font-bold py-4 rounded-lg transition-colors active:bg-red-400">←</button>
+                </div>
+                
+                <!-- Botão Limpar -->
+                <button type="button" onclick="limparQuantidade()" class="w-full mt-2 bg-orange-600 hover:bg-orange-500 text-white text-lg font-bold py-3 rounded-lg transition-colors active:bg-orange-400">
+                    LIMPAR
+                </button>
+            </div>
+            
+            <!-- Preço Custo (apenas para ENTRADA, readonly - Ajuste 2) -->
+            <div id="campo-preco-custo" class="hidden">
+                <label for="modal-preco-custo" class="block text-gray-300 mb-2 font-semibold">Preço Custo (R$)</label>
+                <input type="number" 
+                       id="modal-preco-custo" 
+                       step="0.01" 
+                       readonly
+                       class="w-full text-lg p-3 bg-slate-600 text-gray-300 rounded-lg cursor-default">
+            </div>
+            
+            <!-- Botões -->
+            <div class="flex gap-3 mt-6">
+                <button type="button" 
+                        onclick="fecharModal()"
+                        class="flex-1 bg-slate-700 hover:bg-slate-600 text-gray-100 font-semibold py-3 rounded-lg transition-colors">
+                    Cancelar
+                </button>
+                <button type="submit" 
+                        class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-lg transition-colors text-lg">
+                    ADICIONAR
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/lote_novo.js') }}"></script>
+{% endblock %}

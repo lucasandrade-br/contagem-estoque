@@ -1,0 +1,541 @@
+{% extends "base.html" %}
+
+{% block title %}Lote #{{ lote.id }} - Detalhe{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-3xl font-bold text-amber-500">Lote #{{ lote.id }}</h1>
+        <a href="{{ url_for('admin.lotes_pendentes') }}" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
+            ← Voltar
+        </a>
+    </div>
+    
+    <!-- Aviso -->
+    {% if lotes_anteriores_pendentes > 0 %}
+    <div class="bg-amber-900/30 border border-amber-500 rounded-lg p-4 mb-4 flex items-center gap-3">
+        <svg class="w-6 h-6 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+        <div>
+            <p class="text-amber-300 font-semibold">Atenção: Aprovação fora de ordem</p>
+            <p class="text-amber-200 text-sm">Existem {{ lotes_anteriores_pendentes }} lote(s) anterior(es) ainda pendente(s). Você pode aprovar este mesmo assim, mas certifique-se de que não há dependência.</p>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Informações do Lote -->
+    <div class="bg-slate-800 rounded-lg p-6 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+                <span class="text-gray-400 text-sm">Status</span>
+                <p class="text-yellow-400 font-bold">{{ lote.status }}</p>
+            </div>
+            <div>
+                <span class="text-gray-400 text-sm">Tipo / Motivo</span>
+                <p class="text-white font-semibold">{{ lote.tipo }}</p>
+                <p class="text-gray-300 text-sm">{{ lote.motivo }}</p>
+            </div>
+            <div>
+                <span class="text-gray-400 text-sm">Criado por</span>
+                <p class="text-white font-semibold">{{ lote.usuario_criador_nome }}</p>
+                <p class="text-gray-300 text-sm">{{ lote.data_criacao[:16].replace('T', ' ') }}</p>
+            </div>
+            <div>
+                <span class="text-gray-400 text-sm">Total de Itens</span>
+                <p class="text-white font-bold text-xl">{{ itens|length }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tabela de Itens -->
+    <div class="bg-slate-800 rounded-lg p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-gray-100">Itens do Lote</h2>
+            {% if lote.status == 'PENDENTE_APROVACAO' %}
+            <button onclick="abrirModalAdicionar()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition text-sm">
+                ➕ Adicionar Item
+            </button>
+            {% endif %}
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-700">
+                        <th class="text-left text-gray-400 py-2">Produto</th>
+                        <th class="text-right text-gray-400 py-2">Quantidade</th>
+                        <th class="text-right text-gray-400 py-2">Preço</th>
+                        <th class="text-right text-gray-400 py-2">Subtotal</th>
+                        {% if lote.status == 'PENDENTE_APROVACAO' %}
+                        <th class="text-center text-gray-400 py-2">Ações</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody class="text-gray-300" id="tbody-itens">
+                    {% for item in itens %}
+                    <tr class="border-b border-slate-700" data-item-id="{{ item.id }}">
+                        <td class="py-2">{{ item.produto_nome }}</td>
+                        <td class="text-right">
+                            <span class="qtd-display">{{ item.quantidade_original }}</span> {{ item.unidade_movimentacao }}
+                            {% if item.fator_conversao != 1.0 %}
+                            <br><span class="text-xs text-amber-400">({{ (item.quantidade_original * item.fator_conversao)|round(2) }} {{ item.unidade_padrao_sigla }})</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right preco-display">R$ {{ "%.2f"|format(item.preco_custo_unitario or 0) }}</td>
+                        <td class="text-right subtotal-display">R$ {{ "%.2f"|format((item.quantidade_original * item.fator_conversao) * (item.preco_custo_unitario or 0)) }}</td>
+                        {% if lote.status == 'PENDENTE_APROVACAO' %}
+                        <td class="text-center">
+                            <button onclick="abrirModalEditar({{ item.id }}, '{{ item.produto_nome }}', {{ item.quantidade_original }}, {{ item.preco_custo_unitario or 0 }}, '{{ item.observacao or '' }}')" 
+                                    class="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs mr-1">
+                                ✏️
+                            </button>
+                            <button onclick="removerItem({{ item.id }})" 
+                                    class="px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-xs">
+                                🗑️
+                            </button>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Ações -->
+    {% if lote.status == 'PENDENTE_APROVACAO' %}
+    <div class="flex gap-4">
+        <button onclick="aprovarLote()" 
+                class="flex-1 px-6 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition text-lg">
+            ✅ APROVAR LOTE
+        </button>
+        <button onclick="abrirModalRejeitar()" 
+                class="flex-1 px-6 py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition text-lg">
+            ❌ REJEITAR LOTE
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal Rejeição -->
+<div id="modal-rejeitar" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+    <div class="bg-slate-800 rounded-xl p-6 max-w-md w-full">
+        <h3 class="text-xl font-bold text-red-500 mb-4">Rejeitar Lote #{{ lote.id }}</h3>
+        <p class="text-gray-300 mb-4">Informe o motivo da rejeição:</p>
+        <textarea id="motivo-rejeicao" rows="4" 
+                  class="w-full p-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-red-500 focus:outline-none mb-4" 
+                  placeholder="Ex: Preços incorretos, produto errado, etc."></textarea>
+        <div class="flex gap-3">
+            <button onclick="fecharModalRejeitar()" 
+                    class="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
+                Cancelar
+            </button>
+            <button onclick="rejeitarLote()" 
+                    class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg">
+                Confirmar Rejeição
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Item -->
+<div id="modal-editar" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+    <div class="bg-slate-800 rounded-xl p-6 max-w-md w-full">
+        <h3 class="text-xl font-bold text-blue-400 mb-4">Editar Item</h3>
+        <input type="hidden" id="edit-item-id">
+        
+        <div class="mb-4">
+            <label class="block text-gray-300 text-sm font-bold mb-2">Produto</label>
+            <input type="text" id="edit-produto-nome" readonly 
+                   class="w-full p-3 bg-slate-700 text-gray-400 rounded-lg border border-slate-600">
+        </div>
+        
+        <div class="mb-4">
+            <label class="block text-gray-300 text-sm font-bold mb-2">Quantidade</label>
+            <input type="number" id="edit-quantidade" step="0.01" min="0.01" 
+                   class="w-full p-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none">
+        </div>
+        
+        <div class="mb-4">
+            <label class="block text-gray-300 text-sm font-bold mb-2">Preço Unitário (R$)</label>
+            <input type="number" id="edit-preco" step="0.01" min="0" 
+                   class="w-full p-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none">
+        </div>
+        
+        <div class="mb-4">
+            <label class="block text-gray-300 text-sm font-bold mb-2">Observação</label>
+            <textarea id="edit-observacao" rows="2" 
+                      class="w-full p-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-blue-500 focus:outline-none"></textarea>
+        </div>
+        
+        <div class="flex gap-3">
+            <button onclick="fecharModalEditar()" 
+                    class="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
+                Cancelar
+            </button>
+            <button onclick="salvarEdicao()" 
+                    class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg">
+                💾 Salvar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Adicionar Item -->
+<div id="modal-adicionar" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+    <div class="bg-slate-800 rounded-xl p-6 max-w-lg w-full">
+        <h3 class="text-xl font-bold text-emerald-400 mb-4">Adicionar Item ao Lote</h3>
+        
+        <div class="mb-4">
+            <label class="block text-gray-300 text-sm font-bold mb-2">Produto</label>
+            <input type="text" id="add-produto-search" placeholder="Digite para buscar..." 
+                   class="w-full p-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none">
+            <div id="add-produto-results" class="mt-2 max-h-48 overflow-y-auto"></div>
+            <input type="hidden" id="add-produto-id">
+        </div>
+        
+        <div id="add-unidades-section" class="mb-4 hidden">
+            <label class="block text-gray-300 text-sm font-bold mb-2">Unidade de Movimentação</label>
+            <select id="add-unidade" class="w-full p-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none">
+                <option value="">Selecione...</option>
+            </select>
+        </div>
+        
+        <div class="mb-4">
+            <label class="block text-gray-300 text-sm font-bold mb-2">Quantidade</label>
+            <input type="number" id="add-quantidade" step="0.01" min="0.01" 
+                   class="w-full p-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none">
+            <p id="add-conversao-display" class="text-xs text-amber-400 mt-1"></p>
+        </div>
+        
+        <div class="mb-4">
+            <label class="block text-gray-300 text-sm font-bold mb-2">Preço Unitário (R$)</label>
+            <input type="number" id="add-preco" step="0.01" min="0" 
+                   class="w-full p-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none">
+        </div>
+        
+        <div class="mb-4">
+            <label class="block text-gray-300 text-sm font-bold mb-2">Observação</label>
+            <textarea id="add-observacao" rows="2" 
+                      class="w-full p-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none"></textarea>
+        </div>
+        
+        <div class="flex gap-3">
+            <button onclick="fecharModalAdicionar()" 
+                    class="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
+                Cancelar
+            </button>
+            <button onclick="adicionarNovoItem()" 
+                    class="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg">
+                ➕ Adicionar
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+const LOTE_ID = {{ lote.id }};
+let produtosCache = [];
+let unidadesCache = {};
+
+function aprovarLote() {
+    if (!confirm('Aprovar este lote? As movimentações serão aplicadas ao estoque.')) return;
+    
+    fetch('/lotes/{{ lote.id }}/aprovar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert('✅ ' + data.message);
+            window.location.href = '{{ url_for("admin.lotes_pendentes") }}';
+        } else {
+            alert('❌ Erro: ' + (data.erro || 'Erro desconhecido'));
+        }
+    })
+    .catch(err => {
+        alert('❌ Erro ao aprovar: ' + err.message);
+    });
+}
+
+function abrirModalRejeitar() {
+    document.getElementById('modal-rejeitar').classList.remove('hidden');
+}
+
+function fecharModalRejeitar() {
+    document.getElementById('modal-rejeitar').classList.add('hidden');
+    document.getElementById('motivo-rejeicao').value = '';
+}
+
+function rejeitarLote() {
+    const motivo = document.getElementById('motivo-rejeicao').value.trim();
+    
+    if (!motivo) {
+        alert('Informe o motivo da rejeição');
+        return;
+    }
+    
+    fetch('/lotes/{{ lote.id }}/rejeitar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({motivo})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert('✅ ' + data.message);
+            window.location.href = '{{ url_for("admin.lotes_pendentes") }}';
+        } else {
+            alert('❌ Erro: ' + (data.erro || 'Erro desconhecido'));
+        }
+    })
+    .catch(err => {
+        alert('❌ Erro ao rejeitar: ' + err.message);
+    });
+}
+
+// EDIÇÃO DE ITEM
+function abrirModalEditar(itemId, produtoNome, quantidade, preco, observacao) {
+    document.getElementById('edit-item-id').value = itemId;
+    document.getElementById('edit-produto-nome').value = produtoNome;
+    document.getElementById('edit-quantidade').value = quantidade;
+    document.getElementById('edit-preco').value = preco;
+    document.getElementById('edit-observacao').value = observacao || '';
+    document.getElementById('modal-editar').classList.remove('hidden');
+}
+
+function fecharModalEditar() {
+    document.getElementById('modal-editar').classList.add('hidden');
+}
+
+function salvarEdicao() {
+    const itemId = document.getElementById('edit-item-id').value;
+    const quantidade = parseFloat(document.getElementById('edit-quantidade').value);
+    const preco = parseFloat(document.getElementById('edit-preco').value);
+    const observacao = document.getElementById('edit-observacao').value.trim();
+    
+    if (!quantidade || quantidade <= 0) {
+        alert('Quantidade inválida');
+        return;
+    }
+    
+    fetch(`/lotes/${LOTE_ID}/item/${itemId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            quantidade_original: quantidade,
+            preco_custo_unitario: preco,
+            observacao: observacao
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert('✅ Item atualizado!');
+            location.reload();
+        } else {
+            alert('❌ Erro: ' + (data.erro || 'Erro desconhecido'));
+        }
+    })
+    .catch(err => alert('❌ Erro: ' + err.message));
+}
+
+function removerItem(itemId) {
+    if (!confirm('Remover este item do lote?')) return;
+    
+    fetch(`/lotes/${LOTE_ID}/item/${itemId}`, {
+        method: 'DELETE'
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert('✅ Item removido!');
+            location.reload();
+        } else {
+            alert('❌ Erro: ' + (data.erro || 'Erro desconhecido'));
+        }
+    })
+    .catch(err => alert('❌ Erro: ' + err.message));
+}
+
+// ADIÇÃO DE NOVO ITEM
+function abrirModalAdicionar() {
+    document.getElementById('modal-adicionar').classList.remove('hidden');
+    limparModalAdicionar();
+}
+
+function fecharModalAdicionar() {
+    document.getElementById('modal-adicionar').classList.add('hidden');
+    limparModalAdicionar();
+}
+
+function limparModalAdicionar() {
+    document.getElementById('add-produto-search').value = '';
+    document.getElementById('add-produto-id').value = '';
+    document.getElementById('add-produto-results').innerHTML = '';
+    document.getElementById('add-unidades-section').classList.add('hidden');
+    document.getElementById('add-quantidade').value = '';
+    document.getElementById('add-preco').value = '';
+    document.getElementById('add-observacao').value = '';
+    document.getElementById('add-conversao-display').textContent = '';
+}
+
+// Busca de produtos
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('add-produto-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const termo = this.value.trim();
+            if (termo.length < 2) {
+                document.getElementById('add-produto-results').innerHTML = '';
+                return;
+            }
+            buscarProdutos(termo);
+        });
+    }
+    
+    const unidadeSelect = document.getElementById('add-unidade');
+    const qtdInput = document.getElementById('add-quantidade');
+    if (unidadeSelect && qtdInput) {
+        unidadeSelect.addEventListener('change', atualizarConversaoAdicionar);
+        qtdInput.addEventListener('input', atualizarConversaoAdicionar);
+    }
+});
+
+function buscarProdutos(termo) {
+    fetch(`/api/produtos/buscar?q=${encodeURIComponent(termo)}`)
+        .then(res => res.json())
+        .then(produtos => {
+            produtosCache = produtos;
+            const resultsDiv = document.getElementById('add-produto-results');
+            resultsDiv.innerHTML = '';
+            
+            if (produtos.length === 0) {
+                resultsDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum produto encontrado</p>';
+                return;
+            }
+            
+            produtos.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'p-2 bg-slate-700 hover:bg-slate-600 rounded cursor-pointer mb-1';
+                div.textContent = `${p.id_erp || p.id} - ${p.nome}`;
+                div.onclick = () => selecionarProdutoAdicionar(p);
+                resultsDiv.appendChild(div);
+            });
+        })
+        .catch(err => console.error('Erro ao buscar produtos:', err));
+}
+
+function selecionarProdutoAdicionar(produto) {
+    document.getElementById('add-produto-search').value = `${produto.id_erp || produto.id} - ${produto.nome}`;
+    document.getElementById('add-produto-id').value = produto.id;
+    document.getElementById('add-produto-results').innerHTML = '';
+    document.getElementById('add-preco').value = produto.preco_custo || 0;
+    
+    // Carregar unidades do produto
+    fetch(`/api/produto/${produto.id}/unidades`)
+        .then(res => res.json())
+        .then(data => {
+            const select = document.getElementById('add-unidade');
+            select.innerHTML = '<option value="">Selecione...</option>';
+            
+            // Adicionar unidade padrão primeiro
+            if (data.unidade_padrao) {
+                const opt = document.createElement('option');
+                opt.value = data.unidade_padrao.id;
+                opt.textContent = `${data.unidade_padrao.sigla} (padrão)`;
+                opt.dataset.fator = data.unidade_padrao.fator;
+                opt.dataset.sigla = data.unidade_padrao.sigla;
+                opt.dataset.siglaPadrao = data.unidade_padrao.sigla;
+                select.appendChild(opt);
+            }
+            
+            // Adicionar unidades alternativas
+            if (data.unidades_alternativas && data.unidades_alternativas.length > 0) {
+                data.unidades_alternativas.forEach(u => {
+                    const opt = document.createElement('option');
+                    opt.value = u.id;
+                    opt.textContent = `${u.sigla} (${u.fator}x ${data.unidade_padrao.sigla})`;
+                    opt.dataset.fator = u.fator;
+                    opt.dataset.sigla = u.sigla;
+                    opt.dataset.siglaPadrao = data.unidade_padrao.sigla;
+                    select.appendChild(opt);
+                });
+            }
+            
+            document.getElementById('add-unidades-section').classList.remove('hidden');
+        })
+        .catch(err => {
+            console.error('Erro ao carregar unidades:', err);
+            alert('Erro ao carregar unidades do produto');
+        });
+}
+
+function atualizarConversaoAdicionar() {
+    const select = document.getElementById('add-unidade');
+    const qtd = parseFloat(document.getElementById('add-quantidade').value) || 0;
+    const option = select.options[select.selectedIndex];
+    
+    if (!option || !option.dataset.fator) {
+        document.getElementById('add-conversao-display').textContent = '';
+        return;
+    }
+    
+    const fator = parseFloat(option.dataset.fator);
+    const siglaPadrao = option.dataset.siglaPadrao;
+    
+    if (fator !== 1.0 && qtd > 0) {
+        const convertido = (qtd * fator).toFixed(2);
+        document.getElementById('add-conversao-display').textContent = `= ${convertido} ${siglaPadrao}`;
+    } else {
+        document.getElementById('add-conversao-display').textContent = '';
+    }
+}
+
+function adicionarNovoItem() {
+    const produtoId = document.getElementById('add-produto-id').value;
+    const unidadeId = document.getElementById('add-unidade').value;
+    const quantidade = parseFloat(document.getElementById('add-quantidade').value);
+    const preco = parseFloat(document.getElementById('add-preco').value);
+    const observacao = document.getElementById('add-observacao').value.trim();
+    
+    if (!produtoId || !unidadeId || !quantidade || quantidade <= 0) {
+        alert('Preencha todos os campos obrigatórios');
+        return;
+    }
+    
+    const select = document.getElementById('add-unidade');
+    const option = select.options[select.selectedIndex];
+    const fator = parseFloat(option.dataset.fator) || 1.0;
+    const sigla = option.dataset.sigla;
+    
+    fetch(`/lotes/${LOTE_ID}/item`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            id_produto: produtoId,
+            quantidade_original: quantidade,
+            unidade_movimentacao: sigla,
+            fator_conversao: fator,
+            preco_custo_unitario: preco,
+            observacao: observacao
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.item_id) {
+            alert('✅ Item adicionado!');
+            location.reload();
+        } else {
+            alert('❌ Erro: ' + (data.erro || 'Erro desconhecido'));
+        }
+    })
+    .catch(err => alert('❌ Erro: ' + err.message));
+}
+</script>
+
+
+</script>
+{% endblock %}

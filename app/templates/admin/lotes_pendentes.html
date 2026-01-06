@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Lotes Pendentes de Aprovação{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-6">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-3xl font-bold text-amber-500">Lotes Pendentes de Aprovação</h1>
+        <a href="{{ url_for('admin.dashboard') }}" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
+            ← Voltar
+        </a>
+    </div>
+    
+    {% if lotes %}
+    <div class="grid grid-cols-1 gap-4">
+        {% for lote in lotes %}
+        <div class="bg-slate-800 rounded-lg p-6 border-l-4 {% if lote.tipo == 'ENTRADA' %}border-green-500{% elif lote.tipo == 'SAIDA' %}border-red-500{% else %}border-blue-500{% endif %}">
+            <!-- Aviso de lotes anteriores -->
+            {% if lote.lotes_anteriores_pendentes > 0 %}
+            <div class="bg-amber-900/30 border border-amber-500 rounded-lg p-3 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+                <span class="text-amber-300 text-sm">
+                    <strong>Atenção:</strong> Existem {{ lote.lotes_anteriores_pendentes }} lote(s) anterior(es) pendente(s)
+                </span>
+            </div>
+            {% endif %}
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div>
+                    <span class="text-gray-400 text-sm">Lote</span>
+                    <p class="text-white font-bold text-xl">#{{ lote.id }}</p>
+                </div>
+                <div>
+                    <span class="text-gray-400 text-sm">Tipo / Motivo</span>
+                    <p class="text-white font-semibold">{{ lote.tipo }}</p>
+                    <p class="text-gray-300 text-sm">{{ lote.motivo }}</p>
+                </div>
+                <div>
+                    <span class="text-gray-400 text-sm">Criado por</span>
+                    <p class="text-white font-semibold">{{ lote.usuario_nome }}</p>
+                    <p class="text-gray-300 text-sm">{{ lote.data_criacao[:16].replace('T', ' ') }}</p>
+                </div>
+                <div>
+                    <span class="text-gray-400 text-sm">Resumo</span>
+                    <p class="text-white font-semibold">{{ lote.total_itens }} item(s)</p>
+                    <p class="text-emerald-400 text-sm">R$ {{ "%.2f"|format(lote.valor_total or 0) }}</p>
+                </div>
+            </div>
+            
+            <div class="flex gap-3">
+                <a href="{{ url_for('admin.lote_detalhe', id_lote=lote.id) }}" 
+                   class="flex-1 text-center px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition">
+                    📋 Ver Detalhes
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-slate-800 rounded-lg p-12 text-center">
+        <p class="text-gray-400 text-lg">✅ Nenhum lote pendente de aprovação no momento</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

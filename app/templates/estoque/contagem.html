@@ -206,7 +206,14 @@
         <form id="form-contagem" class="space-y-4">
             <input type="hidden" id="modal-produto-id">
             <input type="hidden" id="modal-local-id" value="{{ local.id }}">
-            
+            <!-- Select Unidade -->
+            <div>
+                <label for="modal-unidade" class="block text-gray-300 mb-2">Unidade</label>
+                <select id="modal-unidade" 
+                        required
+                        class="w-full text-lg p-4 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </select>
+            </div>
             <!-- Input Quantidade (readonly para usar apenas teclado customizado) -->
             <div>
                 <label for="modal-quantidade" class="block text-gray-300 mb-2">Quantidade</label>
@@ -249,14 +256,7 @@
                 </button>
             </div>
             
-            <!-- Select Unidade -->
-            <div>
-                <label for="modal-unidade" class="block text-gray-300 mb-2">Unidade</label>
-                <select id="modal-unidade" 
-                        required
-                        class="w-full text-lg p-4 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
-                </select>
-            </div>
+            
             
             <!-- Botões -->
             <div class="flex gap-3 mt-6">
@@ -459,7 +459,6 @@
 <script src="{{ url_for('static', filename='js/produto_modal.js') }}"></script>
 
 <script>
-// O restante do seu código começa aqui...
 
 // ============================================
 // OFFLINE-FIRST STORE & FORWARD LOGIC

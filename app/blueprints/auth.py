@@ -18,15 +18,30 @@ def gerente_required(view):
 @bp.route('/')
 def index():
     db = get_db()
+    
+    # Buscar todos os usuários ativos (para contagem e movimentação)
     usuarios = db.execute(
-        "SELECT * FROM usuarios WHERE funcao != 'Gerente' AND ativo = 1 ORDER BY nome"
+        "SELECT * FROM usuarios WHERE ativo = 1 ORDER BY nome"
     ).fetchall()
+    
+    # Verificar se há inventário aberto (para mostrar seção de contagem)
+    inventario_aberto = db.execute(
+        "SELECT id FROM inventarios WHERE status = 'Aberto' LIMIT 1"
+    ).fetchone() is not None
+    
     local_ip = get_local_ip()
-    return render_template('auth/index.html', usuarios=usuarios, local_ip=local_ip)
+    
+    return render_template(
+        'auth/index.html', 
+        usuarios=usuarios, 
+        local_ip=local_ip,
+        inventario_aberto=inventario_aberto
+    )
 
 
 @bp.route('/selecionar_usuario/<int:user_id>')
 def selecionar_usuario(user_id):
+    """Seleciona usuário para CONTAGEM (requer inventário aberto)."""
     db = get_db()
     cursor = db.execute("SELECT id FROM inventarios WHERE status = 'Aberto' LIMIT 1")
     if not cursor.fetchone():
@@ -40,6 +55,23 @@ def selecionar_usuario(user_id):
     session['funcao'] = usuario['funcao']
     session['is_gerente'] = True if usuario['funcao'] == 'Gerente' else session.get('is_gerente', False)
     return redirect(url_for('estoque.setores'))
+
+
+@bp.route('/selecionar_usuario_movimentacao/<int:user_id>')
+def selecionar_usuario_movimentacao(user_id):
+    """Seleciona usuário para MOVIMENTAÇÃO (não requer inventário aberto)."""
+    db = get_db()
+    
+    usuario = db.execute('SELECT * FROM usuarios WHERE id = ? AND ativo = 1', (user_id,)).fetchone()
+    if not usuario:
+        flash('Usuário não encontrado', 'error')
+        return redirect(url_for('auth.index'))
+    
+    # Salvar ID do usuário que está criando a movimentação
+    session['user_movimentacao_id'] = usuario['id']
+    session['user_movimentacao_nome'] = usuario['nome']
+    
+    return redirect(url_for('admin.lote_novo'))
 
 
 @bp.route('/login_admin', methods=['GET', 'POST'])

@@ -170,6 +170,13 @@ def dashboard():
         ).fetchone()
         ocorrencias_pendentes = result['count'] if result else 0
 
+    # Contar lotes pendentes de aprovação
+    lotes_pendentes_count = 0
+    result_lotes = db.execute(
+        "SELECT COUNT(*) as count FROM lotes_movimentacao WHERE status = 'PENDENTE_APROVACAO'"
+    ).fetchone()
+    lotes_pendentes_count = result_lotes['count'] if result_lotes else 0
+
     return render_template(
         'admin/dashboard.html',
         inventario_aberto=inventario_aberto,
@@ -179,6 +186,7 @@ def dashboard():
         logs_recentes=logs,
         total_pendencias=nao_contados if inventario_aberto else 0,
         ocorrencias_pendentes=ocorrencias_pendentes,
+        lotes_pendentes_count=lotes_pendentes_count,
         categorias=categorias,
         is_gerente=True
     )
@@ -583,7 +591,10 @@ def preview_fechamento():
                 p.nome as produto_nome,
                 p.id_erp,
                 p.gtin,
-                p.estoque_atual,
+                COALESCE(
+                    (SELECT SUM(saldo) FROM estoque_saldos WHERE produto_id = p.id),
+                    0
+                ) as estoque_atual,
                 p.preco_custo,
                 COALESCE(SUM(c.quantidade_padrao), 0) as quantidade_contada,
                 u.sigla as unidade_padrao,
@@ -614,7 +625,10 @@ def preview_fechamento():
                 p.nome as produto_nome,
                 p.id_erp,
                 p.gtin,
-                p.estoque_atual,
+                COALESCE(
+                    (SELECT SUM(saldo) FROM estoque_saldos WHERE produto_id = p.id),
+                    0
+                ) as estoque_atual,
                 p.preco_custo,
                 COALESCE(SUM(c.quantidade_padrao), 0) as quantidade_contada,
                 u.sigla as unidade_padrao,
@@ -1937,6 +1951,122 @@ def exportar_excel(inventario_id):
 # Movimentações de Estoque (Kardex)
 
 
+@bp.route('/lotes/novo')
+def lote_novo():
+    """Interface para criar novo lote de movimentação."""
+    # Não requer verificação gerente_required - qualquer usuário pode criar
+    return render_template('admin/lote_novo.html')
+
+
+@bp.route('/lotes/pendentes')
+def lotes_pendentes():
+    """Lista lotes aguardando aprovação."""
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+    
+    db = get_db()
+    
+    # Buscar lotes pendentes com informações do usuário criador
+    lotes = db.execute('''
+        SELECT 
+            l.*,
+            u.nome as usuario_nome,
+            u.funcao as usuario_funcao,
+            COUNT(DISTINCT li.id) as total_itens,
+            SUM(li.quantidade_original * li.fator_conversao * COALESCE(li.preco_custo_unitario, 0)) as valor_total
+        FROM lotes_movimentacao l
+        LEFT JOIN usuarios u ON l.id_usuario = u.id
+        LEFT JOIN lotes_movimentacao_itens li ON l.id = li.id_lote
+        WHERE l.status = 'PENDENTE_APROVACAO'
+        GROUP BY l.id
+        ORDER BY l.data_criacao ASC
+    ''').fetchall()
+    
+    # Verificar se há lotes anteriores pendentes para cada um (para avisos)
+    lotes_com_aviso = []
+    for lote in lotes:
+        anteriores = db.execute('''
+            SELECT COUNT(*) as total
+            FROM lotes_movimentacao
+            WHERE status = 'PENDENTE_APROVACAO'
+              AND data_criacao < ?
+              AND id != ?
+        ''', (lote['data_criacao'], lote['id'])).fetchone()
+        
+        lotes_com_aviso.append({
+            **dict(lote),
+            'lotes_anteriores_pendentes': anteriores['total']
+        })
+    
+    return render_template('admin/lotes_pendentes.html', lotes=lotes_com_aviso)
+
+
+@bp.route('/lotes/<int:id_lote>')
+def lote_detalhe(id_lote):
+    """Detalhe de um lote para aprovação/visualização."""
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+    
+    db = get_db()
+    
+    # Buscar lote com dados do criador e aprovador
+    lote = db.execute('''
+        SELECT 
+            l.*,
+            u_criador.nome as usuario_criador_nome,
+            u_criador.funcao as usuario_criador_funcao,
+            u_aprovador.nome as usuario_aprovador_nome,
+            so.nome as setor_origem_nome,
+            lo.nome as local_origem_nome,
+            sd.nome as setor_destino_nome,
+            ld.nome as local_destino_nome
+        FROM lotes_movimentacao l
+        LEFT JOIN usuarios u_criador ON l.id_usuario = u_criador.id
+        LEFT JOIN usuarios u_aprovador ON l.id_usuario_aprovador = u_aprovador.id
+        LEFT JOIN setores so ON l.setor_origem_id = so.id
+        LEFT JOIN locais lo ON l.local_origem_id = lo.id
+        LEFT JOIN setores sd ON l.setor_destino_id = sd.id
+        LEFT JOIN locais ld ON l.local_destino_id = ld.id
+        WHERE l.id = ?
+    ''', (id_lote,)).fetchone()
+    
+    if not lote:
+        flash('Lote não encontrado', 'error')
+        return redirect(url_for('admin.lotes_pendentes'))
+    
+    # Buscar itens do lote
+    itens = db.execute('''
+        SELECT 
+            i.*,
+            p.nome as produto_nome,
+            p.id_erp,
+            p.gtin,
+            p.estoque_atual,
+            um.sigla as unidade_padrao_sigla
+        FROM lotes_movimentacao_itens i
+        JOIN produtos p ON i.id_produto = p.id
+        JOIN unidades_medida um ON p.id_unidade_padrao = um.id
+        WHERE i.id_lote = ?
+        ORDER BY i.created_at
+    ''', (id_lote,)).fetchall()
+    
+    # Verificar lotes anteriores pendentes
+    anteriores = db.execute('''
+        SELECT COUNT(*) as total
+        FROM lotes_movimentacao
+        WHERE status = 'PENDENTE_APROVACAO'
+          AND data_criacao < ?
+          AND id != ?
+    ''', (lote['data_criacao'], id_lote)).fetchone()
+    
+    return render_template(
+        'admin/lote_detalhe.html', 
+        lote=dict(lote),
+        itens=[dict(i) for i in itens],
+        lotes_anteriores_pendentes=anteriores['total']
+    )
+
+
 @bp.route('/movimentacoes')
 def movimentacoes():
     """Lista as movimentações de estoque (Kardex)."""
@@ -2122,90 +2252,6 @@ def movimentacoes():
     )
 
 
-@bp.route('/nova_movimentacao', methods=['POST'])
-def nova_movimentacao():
-    """Registra uma nova movimentação manual de estoque."""
-    if not gerente_required():
-        return jsonify({'erro': 'Acesso negado'}), 403
-    
-    db = get_db()
-    
-    try:
-        # Receber dados do formulário
-        produto_id = int(request.form.get('produto_id'))
-        tipo = request.form.get('tipo')
-        motivo = request.form.get('motivo')
-        quantidade_original = float(request.form.get('quantidade'))
-        unidade_movimentacao = request.form.get('unidade_movimentacao', '').strip()
-        fator_conversao = float(request.form.get('fator_conversao', 1.0))
-        origem = request.form.get('origem', '').strip()
-        observacao = request.form.get('observacao', '').strip()
-        
-        # Validações básicas
-        if not produto_id or not tipo or not motivo:
-            flash('Produto, Tipo e Motivo são obrigatórios.', 'error')
-            return redirect(url_for('admin.movimentacoes'))
-        
-        if quantidade_original <= 0:
-            flash('Quantidade deve ser maior que zero.', 'error')
-            return redirect(url_for('admin.movimentacoes'))
-        
-        if fator_conversao <= 0:
-            flash('Fator de conversão inválido.', 'error')
-            return redirect(url_for('admin.movimentacoes'))
-        
-        # Registrar movimentação
-        usuario_id = session.get('user_id')
-        
-        movimentacao_id = registrar_movimento(
-            db=db,
-            produto_id=produto_id,
-            tipo=tipo,
-            quantidade_original=quantidade_original,
-            motivo=motivo,
-            unidade_movimentacao=unidade_movimentacao if unidade_movimentacao else None,
-            fator_conversao=fator_conversao,
-            origem=origem if origem else 'Movimentação Manual',
-            usuario_id=usuario_id,
-            observacao=observacao if observacao else None
-        )
-        
-        db.commit()
-        
-        # Buscar nome do produto para mensagem
-        produto = db.execute(
-            'SELECT nome FROM produtos WHERE id = ?', 
-            (produto_id,)
-        ).fetchone()
-        
-        quantidade_convertida = quantidade_original * fator_conversao
-        
-        if fator_conversao != 1.0 and unidade_movimentacao:
-            msg_quantidade = f'{quantidade_original:.2f} {unidade_movimentacao} ({quantidade_convertida:.2f} un. padrão)'
-        else:
-            msg_quantidade = f'{quantidade_convertida:.2f} un.'
-        
-        flash(
-            f'✅ Movimentação registrada com sucesso! '
-            f'{tipo}: {msg_quantidade} - {produto["nome"]}',
-            'success'
-        )
-        
-        return redirect(url_for('admin.movimentacoes'))
-        
-    except ValueError as e:
-        db.rollback()
-        flash(f'❌ Erro de validação: {str(e)}', 'error')
-        return redirect(url_for('admin.movimentacoes'))
-        
-    except Exception as e:
-        db.rollback()
-        flash(f'❌ Erro ao registrar movimentação: {str(e)}', 'error')
-        import traceback
-        traceback.print_exc()
-        return redirect(url_for('admin.movimentacoes'))
-
-
 @bp.route('/estoque_atual')
 def estoque_atual():
     """Tela de análise de estoque atual: quantidades, valores e status."""
@@ -2271,6 +2317,13 @@ def estoque_atual():
                 FROM movimentacoes
                 GROUP BY id_produto
             ) m2 ON m1.id_produto = m2.id_produto AND m1.data_movimento = m2.max_data
+        ),
+        saldos_produtos AS (
+            SELECT 
+                produto_id,
+                SUM(saldo) as saldo_total
+            FROM estoque_saldos
+            GROUP BY produto_id
         )
         SELECT 
             p.id,
@@ -2281,13 +2334,14 @@ def estoque_atual():
             p.preco_custo,
             p.curva_abc,
             u.sigla as unidade_padrao,
-            COALESCE(p.estoque_atual, 0) as estoque_atual,
-            COALESCE(p.estoque_atual, 0) * COALESCE(p.preco_custo, 0) as valor_total,
+            COALESCE(sp.saldo_total, 0) as estoque_atual,
+            COALESCE(sp.saldo_total, 0) * COALESCE(p.preco_custo, 0) as valor_total,
             um.ultima_movimentacao,
             um.tipo_ultima_mov
         FROM produtos p
         LEFT JOIN unidades_medida u ON p.id_unidade_padrao = u.id
         LEFT JOIN ultima_mov um ON p.id = um.id_produto
+        LEFT JOIN saldos_produtos sp ON p.id = sp.produto_id
         WHERE {where_sql}
         ORDER BY {order_by}
         LIMIT ? OFFSET ?
@@ -2323,13 +2377,19 @@ def estoque_atual():
     
     # Calcular estatísticas globais
     sql_stats = f'''
+        WITH saldos AS (
+            SELECT produto_id, SUM(saldo) as saldo_total
+            FROM estoque_saldos
+            GROUP BY produto_id
+        )
         SELECT 
             COUNT(DISTINCT p.id) as total_produtos,
-            COALESCE(SUM(COALESCE(p.estoque_atual, 0) * COALESCE(p.preco_custo, 0)), 0) as valor_total,
-            COALESCE(SUM(CASE WHEN COALESCE(p.estoque_atual, 0) <= 0 THEN 1 ELSE 0 END), 0) as produtos_zerados,
-            COALESCE(SUM(CASE WHEN COALESCE(p.estoque_atual, 0) > 0 AND COALESCE(p.estoque_atual, 0) < 10 THEN 1 ELSE 0 END), 0) as produtos_baixos,
-            COALESCE(SUM(CASE WHEN COALESCE(p.estoque_atual, 0) >= 10 THEN 1 ELSE 0 END), 0) as produtos_ok
+            COALESCE(SUM(COALESCE(s.saldo_total, 0) * COALESCE(p.preco_custo, 0)), 0) as valor_total,
+            COALESCE(SUM(CASE WHEN COALESCE(s.saldo_total, 0) <= 0 THEN 1 ELSE 0 END), 0) as produtos_zerados,
+            COALESCE(SUM(CASE WHEN COALESCE(s.saldo_total, 0) > 0 AND COALESCE(s.saldo_total, 0) < 10 THEN 1 ELSE 0 END), 0) as produtos_baixos,
+            COALESCE(SUM(CASE WHEN COALESCE(s.saldo_total, 0) >= 10 THEN 1 ELSE 0 END), 0) as produtos_ok
         FROM produtos p
+        LEFT JOIN saldos s ON p.id = s.produto_id
         WHERE p.ativo = 1
     '''
     
@@ -2374,21 +2434,32 @@ def produto_kardex(produto_id):
     data_fim = request.args.get('data_fim', '')
     
     # Buscar dados do produto
-    produto = db.execute('''
+    produto_row = db.execute('''
         SELECT 
-            p.*,
+            p.id,
+            p.nome,
+            p.id_erp,
+            p.gtin,
+            p.categoria,
+            p.preco_custo,
+            p.controla_estoque,
+            p.ativo,
             u.sigla as unidade_sigla,
-            u.nome as unidade_nome
+            u.nome as unidade_nome,
+            COALESCE(
+                (SELECT SUM(saldo) FROM estoque_saldos WHERE produto_id = p.id),
+                0
+            ) as estoque_atual
         FROM produtos p
         LEFT JOIN unidades_medida u ON p.id_unidade_padrao = u.id
         WHERE p.id = ?
     ''', (produto_id,)).fetchone()
     
-    if not produto:
+    if not produto_row:
         flash('Produto não encontrado.', 'error')
         return redirect(url_for('admin.movimentacoes'))
     
-    produto = dict(produto)
+    produto = dict(produto_row)
     
     # Calcular SALDO INICIAL (antes do período filtrado)
     # Se não houver filtro de data_inicio, saldo inicial = 0 (começou do zero)

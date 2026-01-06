@@ -344,3 +344,124 @@ def api_produto_unidades(produto_id):
         'unidades_alternativas': unidades_alternativas
     })
 
+
+@bp.route('/config/nivel_controle')
+def api_config_nivel_controle():
+    """
+    Retorna o nível de controle de estoque configurado no sistema.
+    Usado pelo frontend para adaptar a interface de acordo com o nível.
+    """
+    from ..utils import obter_nivel_controle
+    db = get_db()
+    nivel = obter_nivel_controle(db)
+    return jsonify({'nivel': nivel})
+
+
+@bp.route('/setores')
+def api_setores():
+    """
+    Retorna lista de todos os setores ativos.
+    Usado nos formulários de movimentação quando nivel = SETOR ou LOCAL.
+    """
+    db = get_db()
+    setores = db.execute('''
+        SELECT id, nome
+        FROM setores
+        WHERE ativo = 1
+        ORDER BY nome
+    ''').fetchall()
+    
+    return jsonify([
+        {'id': s['id'], 'nome': s['nome']}
+        for s in setores
+    ])
+
+
+@bp.route('/locais')
+def api_locais():
+    """
+    Retorna lista de todos os locais ativos com seus setores.
+    Usado nos formulários de movimentação quando nivel = LOCAL.
+    Pode filtrar por setor através do parâmetro ?id_setor=X
+    """
+    db = get_db()
+    id_setor = request.args.get('id_setor', type=int)
+    
+    if id_setor:
+        locais = db.execute('''
+            SELECT l.id, l.nome, l.id_setor, s.nome as setor_nome
+            FROM locais l
+            JOIN setores s ON l.id_setor = s.id
+            WHERE l.ativo = 1 AND l.id_setor = ?
+            ORDER BY l.nome
+        ''', (id_setor,)).fetchall()
+    else:
+        locais = db.execute('''
+            SELECT l.id, l.nome, l.id_setor, s.nome as setor_nome
+            FROM locais l
+            JOIN setores s ON l.id_setor = s.id
+            WHERE l.ativo = 1
+            ORDER BY s.nome, l.nome
+        ''').fetchall()
+    
+    return jsonify([
+        {
+            'id': loc['id'],
+            'nome': loc['nome'],
+            'id_setor': loc['id_setor'],
+            'setor_nome': loc['setor_nome']
+        }
+        for loc in locais
+    ])
+
+
+@bp.route('/produtos/buscar')
+def api_produtos_buscar():
+    """
+    Busca produtos por termo (nome, ID ERP ou GTIN).
+    Retorna informações básicas + estoque atual e unidade.
+    Usado no formulário de adição de itens ao lote.
+    """
+    termo = request.args.get('q', '').strip()
+    
+    if not termo or len(termo) < 2:
+        return jsonify([])
+    
+    db = get_db()
+    
+    # Busca por nome, ID ERP ou GTIN (case-insensitive)
+    produtos = db.execute('''
+        SELECT 
+            p.id,
+            p.nome,
+            p.id_erp,
+            p.gtin,
+            p.estoque_atual,
+            p.preco_custo,
+            u.sigla as unidade_simbolo,
+            u.nome as unidade_nome
+        FROM produtos p
+        LEFT JOIN unidades_medida u ON p.id_unidade_padrao = u.id
+        WHERE p.ativo = 1
+          AND (
+              p.nome LIKE ? OR
+              p.id_erp LIKE ? OR
+              p.gtin LIKE ?
+          )
+        ORDER BY p.nome
+        LIMIT 20
+    ''', (f'%{termo}%', f'%{termo}%', f'%{termo}%')).fetchall()
+    
+    return jsonify([
+        {
+            'id': prod['id'],
+            'nome': prod['nome'],
+            'id_erp': prod['id_erp'],
+            'gtin': prod['gtin'],
+            'estoque_atual': float(prod['estoque_atual'] or 0),
+            'preco_custo': float(prod['preco_custo'] or 0),
+            'unidade_simbolo': prod['unidade_simbolo'],
+            'unidade_nome': prod['unidade_nome']
+        }
+        for prod in produtos
+    ])
