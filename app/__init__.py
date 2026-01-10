@@ -4,6 +4,49 @@ from .db import init_db
 from .utils import format_reais, format_datetime_br
 
 
+def iniciar_job_sincronizacao(app):
+    """
+    Inicia job em background que exporta o banco de dados para Google Drive
+    a cada 30 minutos (apenas para LOJA ou CADASTRO).
+    """
+    from dotenv import load_dotenv
+    load_dotenv()
+    
+    perfil = os.getenv('PERFIL_MAQUINA', '').strip().upper()
+    caminho_drive = os.getenv('CAMINHO_GOOGLE_DRIVE', '').strip()
+    
+    # Só ativa job para LOJA ou CADASTRO
+    if perfil not in ['LOJA', 'CADASTRO'] or not caminho_drive:
+        return
+    
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from app.sync_drive import exportar_para_nuvem
+        
+        scheduler = BackgroundScheduler()
+        
+        # Executa a cada 30 minutos
+        scheduler.add_job(
+            func=lambda: exportar_para_nuvem(caminho_drive),
+            trigger="interval",
+            minutes=30,
+            id='sync_drive_job',
+            name='Exportar banco para Google Drive',
+            replace_existing=True
+        )
+        
+        scheduler.start()
+        app.logger.info(f"✅ Job de sincronização iniciado (a cada 30 min) - Perfil: {perfil}")
+        
+        # Garante que scheduler para quando Flask parar
+        import atexit
+        atexit.register(lambda: scheduler.shutdown())
+        
+    except ImportError:
+        app.logger.warning("⚠️  APScheduler não está instalado. Sincronização automática desabilitada.")
+        app.logger.warning("   Instale com: pip install apscheduler")
+
+
 def create_app(config_object=None):
     app = Flask(__name__, template_folder='templates', static_folder='static')
 
@@ -13,7 +56,7 @@ def create_app(config_object=None):
         # Configurações padrão
         app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
         app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
-        app.config['DATABASE'] = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'padaria.db')
+        app.config['DATABASE'] = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'database.db')
 
     # Ensure upload folder exists
     os.makedirs(app.config.get('UPLOAD_FOLDER', 'uploads'), exist_ok=True)
@@ -56,6 +99,9 @@ def create_app(config_object=None):
     app.register_blueprint(relatorios_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(lotes_bp)
+
+    # Inicializar job de sincronização para LOJA/CADASTRO
+    iniciar_job_sincronizacao(app)
 
     # Error handlers
     @app.errorhandler(404)

@@ -11,14 +11,14 @@ from threading import Timer
 from dotenv import load_dotenv
 from app import create_app  # Importa a factory
 from config import Config
-from app.sync_drive import exportar_para_nuvem, sincronizar_do_nuvem
+from app.sync_drive import exportar_para_nuvem, sincronizar_do_nuvem, sincronizar_do_nuvem_forcado
 
 # Carrega variáveis de ambiente do arquivo .env
 load_dotenv()
 
 def fazer_backup():
     """Cria uma cópia de segurança do banco de dados antes de iniciar."""
-    db_file = 'database\padaria.db'
+    db_file = 'database\database.db'
     backup_dir = 'backups'
     
     if not os.path.exists(db_file):
@@ -148,7 +148,7 @@ def finalizar_sistema(signum=None, frame=None):
 
 if __name__ == "__main__":
     print("="*60)
-    print("🥐 SISTEMA DE ESTOQUE - INICIANDO")
+    print("SISTEMA DE ESTOQUE - INICIANDO")
     print("="*60)
 
     # 1. Valida configurações do .env
@@ -176,8 +176,9 @@ if __name__ == "__main__":
         print("   ✓ Ao encerrar o programa\n")
         
     elif PERFIL == 'GERENTE':
-        # Computador do GERENTE: Sincroniza (baixa) da nuvem
-        sincronizar_do_nuvem(CAMINHO_DRIVE)
+        # Computador do GERENTE: Sincroniza (baixa) da nuvem SEMPRE
+        print("\n🔄 Modo GERENTE: Sincronizando com última versão da LOJA/CADASTRO...")
+        sincronizar_do_nuvem_forcado(CAMINHO_DRIVE)
 
     # 4. Descobre IP para os Tablets
     ip = obter_ip_local()

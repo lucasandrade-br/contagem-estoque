@@ -15,7 +15,7 @@ import os
 from datetime import datetime, date
 
 # Caminho do banco de dados
-DB_PATH = os.path.join(os.path.dirname(__file__), 'padaria.db')
+DB_PATH = os.path.join(os.path.dirname(__file__), 'database.db')
 
 
 def criar_tabelas(conn):
@@ -473,8 +473,8 @@ def inserir_dados_iniciais(conn):
     
     # Setores
     setores = [
-        ('Cozinha',),
-        ('Loja',),
+        ('Produção',),
+        ('Salão de Vendas',),
         ('Almoxarifado',)
     ]
     cursor.executemany('''
@@ -490,25 +490,20 @@ def inserir_dados_iniciais(conn):
     # Locais (2-3 para cada setor)
     locais = []
     for setor_id, setor_nome in setores_data:
-        if setor_nome == 'Cozinha':
+        if setor_nome == 'Produção':
             locais.extend([
                 ('Local 1', setor_id, 0),
                 ('Local 2', setor_id, 0)
             ])
-        elif setor_nome == 'Loja':
+        elif setor_nome == 'Salão de Vendas':
             locais.extend([
-                ('Prateleira A', setor_id, 0),
-                ('Prateleira B', setor_id, 0)
+                ('Local 1', setor_id, 0),
+                ('Local 2', setor_id, 0)
             ])
         elif setor_nome == 'Almoxarifado':
             locais.extend([
                 ('Estante 1', setor_id, 0),
                 ('Estante 2', setor_id, 0)
-            ])
-        elif setor_nome == 'Estoque Seco':
-            locais.extend([
-                ('Prateleira 1', setor_id, 0),
-                ('Prateleira 2', setor_id, 0)
             ])
     
     cursor.executemany('''
@@ -521,7 +516,6 @@ def inserir_dados_iniciais(conn):
     usuarios = [
         ('Lucas', 'Gerente', '2706', 1),
         ('Funcionario 1', 'Estoquista', None, 1),
-        ('Funcionario 2', 'Estoquista', None, 1),
         ('Funcionario Chefe', 'Estoquista Chefe', None, 1),
         ('Sistema', 'Gerente', None, 1)  # Usuário para operações automáticas
     ]

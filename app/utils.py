@@ -166,13 +166,16 @@ def registrar_movimento(db, produto_id, tipo, quantidade_original, motivo,
     
     movimentacao_id = cursor.lastrowid
     
-    # 2. Atualizar estoque_atual do produto (apenas se controla_estoque = 1)
+    # 2. Atualizar saldo na tabela estoque_saldos (apenas se controla_estoque = 1)
     if controla_estoque:
-        db.execute('''
-            UPDATE produtos 
-            SET estoque_atual = ? 
-            WHERE id = ?
-        ''', (novo_saldo, produto_id))
+        # Sempre grava em estoque_saldos no modo CENTRAL (setor_id=NULL, local_id=NULL)
+        # Calcula a diferença para ajustar o saldo
+        diferenca = quantidade_convertida if tipo == 'ENTRADA' else -quantidade_convertida
+        
+        # UPSERT em estoque_saldos (modo CENTRAL)
+        _ajustar_saldo_tabela(db, produto_id, abs(diferenca), 
+                             setor_id=None, local_id=None, 
+                             incremento=(diferenca > 0))
     
     # 3. Registrar no log de auditoria
     if fator_conversao != 1.0 or unidade_movimentacao:
@@ -221,13 +224,13 @@ def obter_nivel_controle(db):
 
 def obter_saldo(db, produto_id, setor_id=None, local_id=None):
     """
-    Obtém o saldo de um produto conforme o nível de controle.
+    Obtém o saldo de um produto da tabela estoque_saldos.
     
     Args:
         db: Conexão com banco de dados
         produto_id: ID do produto
-        setor_id: ID do setor (obrigatório se nível = SETOR ou LOCAL)
-        local_id: ID do local (obrigatório se nível = LOCAL)
+        setor_id: ID do setor (opcional, None = CENTRAL)
+        local_id: ID do local (opcional, None = sem local específico)
     
     Returns:
         float: Saldo disponível
@@ -235,15 +238,16 @@ def obter_saldo(db, produto_id, setor_id=None, local_id=None):
     nivel = obter_nivel_controle(db)
     
     if nivel == 'CENTRAL':
-        # Modo legado: consultar produtos.estoque_atual
-        produto = db.execute(
-            'SELECT estoque_atual FROM produtos WHERE id = ?',
-            (produto_id,)
-        ).fetchone()
-        return float(produto['estoque_atual'] or 0) if produto else 0.0
+        # Saldo CENTRAL = soma de TODOS os registros do produto em estoque_saldos
+        saldo_row = db.execute('''
+            SELECT COALESCE(SUM(saldo), 0) as saldo_total
+            FROM estoque_saldos 
+            WHERE produto_id = ?
+        ''', (produto_id,)).fetchone()
+        return float(saldo_row['saldo_total']) if saldo_row else 0.0
     
     elif nivel == 'SETOR':
-        # Saldo por setor
+        # Saldo por setor específico
         saldo_row = db.execute('''
             SELECT saldo FROM estoque_saldos 
             WHERE produto_id = ? AND setor_id = ? AND local_id IS NULL
@@ -264,51 +268,36 @@ def obter_saldo(db, produto_id, setor_id=None, local_id=None):
 def ajustar_saldo(db, produto_id, quantidade_convertida, tipo, 
                   setor_id=None, local_id=None):
     """
-    Ajusta o saldo de um produto conforme o nível de controle.
+    Ajusta o saldo de um produto na tabela estoque_saldos.
     
     Args:
         db: Conexão com banco de dados
         produto_id: ID do produto
         quantidade_convertida: Quantidade em unidade padrão (positiva)
         tipo: 'ENTRADA', 'SAIDA' ou 'TRANSFERENCIA'
-        setor_id: ID do setor
-        local_id: ID do local
+        setor_id: ID do setor (None = CENTRAL)
+        local_id: ID do local (None = sem local específico)
     """
     nivel = obter_nivel_controle(db)
     
+    # SEMPRE usa estoque_saldos, setor_id/local_id definem o nível
     if nivel == 'CENTRAL':
-        # Modo legado: atualizar produtos.estoque_atual
-        if tipo == 'ENTRADA':
-            db.execute('''
-                UPDATE produtos 
-                SET estoque_atual = estoque_atual + ? 
-                WHERE id = ?
-            ''', (quantidade_convertida, produto_id))
-        elif tipo == 'SAIDA':
-            db.execute('''
-                UPDATE produtos 
-                SET estoque_atual = estoque_atual - ? 
-                WHERE id = ?
-            ''', (quantidade_convertida, produto_id))
-        # TRANSFERENCIA não se aplica no modo CENTRAL
-    
+        # Modo CENTRAL: setor_id e local_id são NULL
+        setor_id = None
+        local_id = None
     elif nivel == 'SETOR':
-        # Ajustar saldo por setor
-        if tipo == 'ENTRADA':
-            _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
-                                 setor_id, None, incremento=True)
-        elif tipo == 'SAIDA':
-            _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
-                                 setor_id, None, incremento=False)
+        # Modo SETOR: local_id é NULL
+        local_id = None
+    # elif nivel == 'LOCAL': usa setor_id e local_id fornecidos
     
-    elif nivel == 'LOCAL':
-        # Ajustar saldo por local
-        if tipo == 'ENTRADA':
-            _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
-                                 setor_id, local_id, incremento=True)
-        elif tipo == 'SAIDA':
-            _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
-                                 setor_id, local_id, incremento=False)
+    # Executar ajuste em estoque_saldos
+    if tipo == 'ENTRADA':
+        _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
+                             setor_id, local_id, incremento=True)
+    elif tipo == 'SAIDA':
+        _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
+                             setor_id, local_id, incremento=False)
+    # TRANSFERENCIA é tratada em lotes.py (SAIDA + ENTRADA)
 
 
 def _ajustar_saldo_tabela(db, produto_id, quantidade, setor_id, local_id, incremento=True):

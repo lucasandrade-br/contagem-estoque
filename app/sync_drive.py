@@ -17,8 +17,8 @@ import shutil
 from datetime import datetime
 
 # Configurações
-CAMINHO_BANCO_LOCAL = 'database/padaria.db'
-NOME_ARQUIVO_NUVEM = 'padaria_snapshot.db'
+CAMINHO_BANCO_LOCAL = 'database/database.db'
+NOME_ARQUIVO_NUVEM = 'database.db'
 
 
 def exportar_para_nuvem(caminho_drive):
@@ -148,3 +148,54 @@ def sincronizar_do_nuvem(caminho_drive):
             print(f"\n❌ ERRO ao sincronizar: {e}")
             print("="*60 + "\n")
             return False
+
+
+def sincronizar_do_nuvem_forcado(caminho_drive):
+    """
+    Sincroniza (baixa) o banco de dados do Google Drive SEMPRE, sem validar data.
+    Usado pelo GERENTE para garantir que está com a versão mais recente da LOJA/CADASTRO.
+    
+    Args:
+        caminho_drive (str): Caminho absoluto da pasta do Google Drive
+        
+    Returns:
+        bool: True se sincronizou com sucesso, False em caso de erro
+    """
+    print("\n" + "="*60)
+    print("📥 SINCRONIZANDO DO GOOGLE DRIVE (MODO FORÇADO)")
+    print("="*60)
+    
+    # Caminho completo do arquivo na nuvem
+    origem = os.path.join(caminho_drive, NOME_ARQUIVO_NUVEM)
+    
+    # Verifica se existe backup na nuvem
+    if not os.path.exists(origem):
+        print("⚠️  Nenhum backup encontrado no Google Drive.")
+        print(f"   Caminho: {origem}")
+        print("\n💡 Possíveis causas:")
+        print("   - O computador da LOJA/CADASTRO ainda não exportou nenhum backup")
+        print("   - O Google Drive ainda não sincronizou o arquivo")
+        print("   - O caminho configurado está incorreto")
+        return False
+    
+    try:
+        # Cria a pasta database se não existir
+        os.makedirs(os.path.dirname(CAMINHO_BANCO_LOCAL), exist_ok=True)
+        
+        print(f"\n📥 Baixando: {origem}")
+        print(f"📂 Destino:  {os.path.abspath(CAMINHO_BANCO_LOCAL)}")
+        shutil.copy2(origem, CAMINHO_BANCO_LOCAL)
+        
+        tamanho_mb = os.path.getsize(CAMINHO_BANCO_LOCAL) / (1024 * 1024)
+        timestamp = datetime.fromtimestamp(os.path.getmtime(CAMINHO_BANCO_LOCAL))
+        
+        print(f"\n✅ Banco de dados sincronizado com sucesso!")
+        print(f"   Tamanho: {tamanho_mb:.2f} MB")
+        print(f"   Versão: {timestamp.strftime('%d/%m/%Y às %H:%M:%S')}")
+        print("="*60 + "\n")
+        return True
+        
+    except Exception as e:
+        print(f"\n❌ ERRO ao sincronizar: {e}")
+        print("="*60 + "\n")
+        return False

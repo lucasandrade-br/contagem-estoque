@@ -192,6 +192,38 @@ def dashboard():
     )
 
 
+@bp.route('/sincronizar_manual')
+def sincronizar_manual():
+    """
+    Rota para sincronização manual do banco de dados (usado pelo GERENTE).
+    Força o download da versão mais recente do Google Drive.
+    """
+    if not gerente_required():
+        return jsonify({'erro': 'Acesso negado'}), 403
+    
+    load_dotenv()
+    perfil = os.getenv('PERFIL_MAQUINA', '').strip().upper()
+    caminho_drive = os.getenv('CAMINHO_GOOGLE_DRIVE', '').strip()
+    
+    # Apenas GERENTE pode fazer sincronização manual
+    if perfil != 'GERENTE':
+        return jsonify({'erro': 'Sincronização manual disponível apenas para perfil GERENTE'}), 400
+    
+    if not caminho_drive:
+        return jsonify({'erro': 'CAMINHO_GOOGLE_DRIVE não configurado no .env'}), 400
+    
+    try:
+        from app.sync_drive import sincronizar_do_nuvem_forcado
+        sucesso = sincronizar_do_nuvem_forcado(caminho_drive)
+        
+        if sucesso:
+            return jsonify({'mensagem': 'Dados sincronizados com sucesso!'}), 200
+        else:
+            return jsonify({'erro': 'Falha ao sincronizar. Verifique se há backup no Google Drive.'}), 500
+    except Exception as e:
+        return jsonify({'erro': f'Erro ao sincronizar: {str(e)}'}), 500
+
+
 @bp.route('/gerar_qrcode')
 def gerar_qrcode():
     

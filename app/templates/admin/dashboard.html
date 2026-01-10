@@ -9,9 +9,18 @@
             <p class="text-gray-400 mt-1">Visão geral da operação e sincronia de dados.</p>
         </div>
         
-        <button onclick="abrirModalQRCode()" class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg transition text-sm font-medium border border-slate-600">
-            <span class="text-lg">📱</span> Conectar Tablets
-        </button>
+        <div class="flex gap-3">
+            <!-- Botão de Sincronização Manual (apenas para GERENTE) -->
+            {% if PERFIL_SISTEMA == 'GERENTE' %}
+            <button onclick="atualizarDadosManual()" id="btnSincronizar" class="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition text-sm font-medium border border-blue-600">
+                <span class="text-lg">🔄</span> Atualizar Dados
+            </button>
+            {% endif %}
+            
+            <button onclick="abrirModalQRCode()" class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg transition text-sm font-medium border border-slate-600">
+                <span class="text-lg">📱</span> Conectar Tablets
+            </button>
+        </div>
     </div>
 
     {% if inventario_aberto %}
@@ -209,14 +218,16 @@
                 </div>
             </a>
             {% if not MODO_LEITURA %}
-                <a href="{{ url_for('admin.admin_categorias') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-amber-500 transition flex items-center gap-3 group">
-                    <span class="text-2xl group-hover:scale-110 transition">📂</span>
-                    <div class="text-left">
-                        <span class="block font-bold text-gray-200 text-sm">Categorias</span>
-                        <span class="block text-xs text-gray-500">Inventários parciais</span>
-                    </div>
-                </a>
-
+                {% if PERFIL_MAQUINA == 'LOJA' %}
+                    <a href="{{ url_for('admin.admin_categorias') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-amber-500 transition flex items-center gap-3 group">
+                        <span class="text-2xl group-hover:scale-110 transition">📂</span>
+                        <div class="text-left">
+                            <span class="block font-bold text-gray-200 text-sm">Categorias</span>
+                            <span class="block text-xs text-gray-500">Inventários parciais</span>
+                        </div>
+                    </a>
+                {% endif %}
+                
                 <a href="{{ url_for('admin.admin_unidades') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-slate-500 transition flex items-center gap-3 group">
                     <span class="text-2xl group-hover:scale-110 transition">📏</span>
                     <div class="text-left">
@@ -459,6 +470,40 @@
             return false;
         }
         return confirm('⚠️ ÚLTIMA CONFIRMAÇÃO: Tem certeza absoluta que deseja cancelar este inventário?');
+    }
+    
+    // Função para sincronização manual (GERENTE)
+    async function atualizarDadosManual() {
+        const btn = document.getElementById('btnSincronizar');
+        const textoOriginal = btn.innerHTML;
+        
+        try {
+            // Desabilita botão e mostra loading
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-spin">⏳</span> Sincronizando...';
+            
+            const response = await fetch('{{ url_for("admin.sincronizar_manual") }}');
+            const data = await response.json();
+            
+            if (response.ok) {
+                btn.innerHTML = '<span>✅</span> Sincronizado!';
+                btn.classList.remove('bg-blue-700', 'hover:bg-blue-600');
+                btn.classList.add('bg-green-700');
+                
+                // Recarrega a página após 1 segundo
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            } else {
+                alert('❌ Erro: ' + (data.erro || 'Falha ao sincronizar'));
+                btn.innerHTML = textoOriginal;
+                btn.disabled = false;
+            }
+        } catch (error) {
+            alert('❌ Erro de conexão: ' + error.message);
+            btn.innerHTML = textoOriginal;
+            btn.disabled = false;
+        }
     }
 </script>
 <style>
