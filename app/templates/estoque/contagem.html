@@ -1,3 +1,17 @@
+<!-- Modal de Confirmação de Duplicidade -->
+<div id="modal-duplicidade" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 hidden">
+    <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full border-4 border-red-600 flex flex-col items-center">
+        <div class="flex items-center gap-3 mb-4">
+            <span class="text-red-600 text-3xl">&#9888;</span>
+            <span class="text-xl font-bold text-red-700">Produto já contado!</span>
+        </div>
+        <p class="text-gray-800 text-center mb-6 font-semibold">Este produto já possui uma contagem registrada neste local.<br>Deseja realmente inserir uma <span class="text-red-600 font-bold">nova quantidade</span>?</p>
+        <div class="flex gap-4 w-full justify-center">
+            <button id="btn-duplicidade-confirmar" class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded shadow">Confirmar nova contagem</button>
+            <button id="btn-duplicidade-cancelar" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold px-6 py-2 rounded shadow">Cancelar</button>
+        </div>
+    </div>
+</div>
 {% extends "base.html" %}
 
 {% block title %}Contagem - {{ local.nome }}{% endblock %}
@@ -876,7 +890,7 @@ function renderizarListaProdutos() {
                     </div>
                 </div>
                 <button type="button"
-                    onclick="abrirModalLista(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}')" 
+                    onclick="abrirModalLista(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}', false)" 
                     class="ml-4 ${foiContado ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white font-bold px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-lg">
                     <span>${foiContado ? '📝' : '📝'}</span>
                     
@@ -893,7 +907,7 @@ function renderizarListaProdutos() {
  * Abre o modal de contagem a partir da lista de produtos
  */
 function abrirModalLista(produtoId, produtoNome) {
-    abrirModal(produtoId, produtoNome);
+    abrirModal(produtoId, produtoNome, false);
 }
 
 /**
@@ -977,7 +991,7 @@ function realizarBusca() {
     }
     
     resultadosBusca.innerHTML = resultados.map(produto => `
-        <button onclick="abrirModal(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}')" 
+        <button onclick="abrirModal(${produto.id}, '${produto.nome.replace(/'/g, "\\'")}', false)" 
                 class="w-full text-left p-4 hover:bg-slate-700 transition-colors border-b border-slate-700 last:border-0">
             <div class="font-semibold text-gray-100">${produto.nome}</div>
         </button>
@@ -1093,7 +1107,7 @@ function realizarBuscaNoModal() {
  */
 function selecionarProdutoDoModal(produtoId, produtoNome) {
     fecharTecladoAlfabetico();
-    abrirModal(produtoId, produtoNome);
+    abrirModal(produtoId, produtoNome, false);
 }
 
 // Fechar busca ao clicar fora
@@ -1104,20 +1118,47 @@ document.addEventListener('click', function(e) {
 });
 
 // Abrir modal
-function abrirModal(produtoId, produtoNome) {
+function abrirModal(produtoId, produtoNome, ignorarDuplicidade) {   
+    // Verificação de duplicidade: produto já contado neste local?
     const produto = todosProdutos.find(p => p.id === produtoId);
     if (!produto) return;
-    
+
+    // Checa se produto já está no historico ou na fila offline
+    if (!ignorarDuplicidade) {
+        const jaContadoHistorico = historico.some(item => (item.produto_id === produtoId) || (item.id_produto === produtoId));
+        const jaContadoFila = fila.some(item => item.produto_id === produtoId);
+        if (jaContadoHistorico || jaContadoFila) {
+            window._abrirModalDuplicidade = () => {
+                document.getElementById('btn-duplicidade-confirmar').onclick = null;
+                document.getElementById('btn-duplicidade-cancelar').onclick = null;
+                document.getElementById('btn-duplicidade-confirmar').onclick = () => {
+                    document.getElementById('modal-duplicidade').classList.add('hidden');
+                    window._abrirModalDuplicidade = null;
+                    abrirModal(produtoId, produtoNome, true);
+                };
+                document.getElementById('btn-duplicidade-cancelar').onclick = () => {
+                    document.getElementById('modal-duplicidade').classList.add('hidden');
+                    resultadosBusca.classList.add('hidden');
+                    inputBusca.value = '';
+                    window._abrirModalDuplicidade = null;
+                };
+            };
+            document.getElementById('modal-duplicidade').classList.remove('hidden');
+            if (window._abrirModalDuplicidade) window._abrirModalDuplicidade();
+            return;
+        }
+    }
+
     document.getElementById('modal-produto-id').value = produtoId;
     document.getElementById('modal-produto-nome').textContent = produtoNome;
     modalQuantidade.value = '';
-    
+
     // Limpa opções atuais de unidade
     modalUnidade.innerHTML = '';
-    
+
     const unidadesPermitidas = produto.unidades_permitidas || [];
     const baseUnitId = produto.id_unidade_padrao;
-    
+
     let listaUnidades = unidadesPermitidas;
     if (!listaUnidades.length) {
         // Fallback: se não houver cadastro, usa todas as unidades com fator 1
@@ -1129,7 +1170,7 @@ function abrirModal(produtoId, produtoNome) {
             permite_decimal: u.permite_decimal,
         }));
     }
-    
+
     listaUnidades.forEach(uPerm => {
         const unidadeInfo = unidadesData.find(u => u.id === (uPerm.id || uPerm.id_unidade) );
         if (!unidadeInfo) return;
@@ -1141,7 +1182,7 @@ function abrirModal(produtoId, produtoNome) {
         option.dataset.fator = uPerm.fator_conversao || uPerm.fator || 1;
         modalUnidade.appendChild(option);
     });
-    
+
     // Seleciona unidade padrão se estiver na lista
     if (baseUnitId) {
         for (let i = 0; i < modalUnidade.options.length; i++) {
@@ -1153,10 +1194,10 @@ function abrirModal(produtoId, produtoNome) {
     }
 
     // Prepara o modal (editor rápido movido para modal reutilizável)
-    
+
     // Ajusta botão decimal baseado na unidade selecionada
     modalUnidade.dispatchEvent(new Event('change'));
-    
+
     modal.classList.remove('hidden');
     resultadosBusca.classList.add('hidden');
     inputBusca.value = '';
