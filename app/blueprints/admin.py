@@ -803,7 +803,7 @@ def confirmar_fechamento():
             SELECT 
                 p.id as produto_id,
                 p.nome as produto_nome,
-                p.estoque_atual,
+                COALESCE((SELECT SUM(saldo) FROM estoque_saldos WHERE produto_id = p.id), 0) as estoque_atual,
                 p.preco_custo,
                 COALESCE(SUM(c.quantidade_padrao), 0) as quantidade_contada,
                 u.sigla as unidade_padrao
@@ -826,7 +826,7 @@ def confirmar_fechamento():
             SELECT 
                 p.id as produto_id,
                 p.nome as produto_nome,
-                p.estoque_atual,
+                COALESCE((SELECT SUM(saldo) FROM estoque_saldos WHERE produto_id = p.id), 0) as estoque_atual,
                 p.preco_custo,
                 COALESCE(SUM(c.quantidade_padrao), 0) as quantidade_contada,
                 u.sigla as unidade_padrao
