@@ -13,6 +13,76 @@ from ..utils import (
 bp = Blueprint('lotes', __name__, url_prefix='/lotes')
 
 
+def ensure_finance_schema(db):
+    """Garante tabelas/colunas usadas pelo módulo financeiro."""
+    # Coluna de flag de exportação
+    cols = [row['name'] for row in db.execute('PRAGMA table_info(lotes_movimentacao)').fetchall()]
+    if 'exportado_financeiro' not in cols:
+        db.execute("ALTER TABLE lotes_movimentacao ADD COLUMN exportado_financeiro INTEGER NOT NULL DEFAULT 0")
+
+    # Tabelas de referência
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS fornecedores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            cnpj TEXT,
+            ie TEXT,
+            contato TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT
+        )
+    ''')
+
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS planos_contas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT,
+            descricao TEXT NOT NULL,
+            tipo TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT
+        )
+    ''')
+
+    # Tabela de dados financeiros do lote
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS compras_lote (
+            id_lote INTEGER PRIMARY KEY,
+            id_fornecedor INTEGER NOT NULL,
+            id_plano_contas INTEGER NOT NULL,
+            num_doc TEXT,
+            observacao TEXT,
+            valor_total REAL NOT NULL,
+            data_emissao TEXT,
+            data_vencimento TEXT,
+            data_pagamento TEXT,
+            valor_pago REAL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT,
+            FOREIGN KEY (id_lote) REFERENCES lotes_movimentacao(id),
+            FOREIGN KEY (id_fornecedor) REFERENCES fornecedores(id),
+            FOREIGN KEY (id_plano_contas) REFERENCES planos_contas(id)
+        )
+    ''')
+
+    # Parcelas
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS compras_parcelas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_lote INTEGER NOT NULL,
+            parcela_num INTEGER NOT NULL,
+            valor REAL NOT NULL,
+            data_vencimento TEXT NOT NULL,
+            data_pagamento TEXT,
+            valor_pago REAL,
+            FOREIGN KEY (id_lote) REFERENCES lotes_movimentacao(id)
+        )
+    ''')
+    db.execute('CREATE INDEX IF NOT EXISTS idx_compras_parcelas_lote ON compras_parcelas(id_lote)')
+
+
 def gerente_required():
     """Verifica se usuário é gerente."""
     return session.get('is_gerente')
@@ -254,7 +324,7 @@ def editar_item(id_lote, item_id):
         (id_lote,)
     ).fetchone()
     
-    if not lote or lote['status'] != 'RASCUNHO':
+    if not lote or lote['status'] not in ('RASCUNHO', 'PENDENTE_APROVACAO'):
         return jsonify({'erro': 'Lote não editável'}), 400
     
     data = request.get_json()
@@ -566,6 +636,94 @@ def finalizar_lote(id_lote):
         db.rollback()
         import traceback
         traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/<int:id_lote>/financeiro', methods=['POST'])
+def salvar_financeiro(id_lote):
+    """Salva dados financeiros de um lote de ENTRADA (fornecedor, plano, parcelas)."""
+    db = get_db()
+    ensure_finance_schema(db)
+
+    lote = db.execute('SELECT tipo, status FROM lotes_movimentacao WHERE id = ?', (id_lote,)).fetchone()
+    if not lote:
+        return jsonify({'erro': 'Lote não encontrado'}), 404
+    if lote['tipo'] != 'ENTRADA':
+        return jsonify({'erro': 'Dados financeiros só se aplicam a ENTRADA'}), 400
+
+    data = request.get_json() or {}
+    id_fornecedor = data.get('id_fornecedor')
+    id_plano = data.get('id_plano_contas')
+    num_doc = (data.get('num_doc') or '').strip()
+    observacao = (data.get('observacao') or '').strip()
+    valor_total = float(data.get('valor_total') or 0)
+    data_emissao = data.get('data_emissao') or None
+    pagamento = data.get('pagamento') or None
+    parcelas = data.get('parcelas') or []
+
+    if not id_fornecedor or not id_plano:
+        return jsonify({'erro': 'Fornecedor e Plano de Contas são obrigatórios'}), 400
+    if valor_total <= 0:
+        return jsonify({'erro': 'Valor total inválido'}), 400
+    if not parcelas:
+        return jsonify({'erro': 'Informe ao menos uma parcela'}), 400
+
+    soma_parcelas = sum(float(p.get('valor') or 0) for p in parcelas)
+    if abs(soma_parcelas - valor_total) > 0.05:
+        return jsonify({'erro': 'Soma das parcelas não fecha com o valor total'}), 400
+
+    if pagamento:
+        if not pagamento.get('data_pagamento') or pagamento.get('valor_pago') is None:
+            return jsonify({'erro': 'Informe data e valor do pagamento'}), 400
+
+    # Verifica existência de fornecedor/plano
+    for_exists = db.execute('SELECT id FROM fornecedores WHERE id = ? AND ativo = 1', (id_fornecedor,)).fetchone()
+    plano_exists = db.execute('SELECT id FROM planos_contas WHERE id = ? AND ativo = 1', (id_plano,)).fetchone()
+    if not for_exists or not plano_exists:
+        return jsonify({'erro': 'Fornecedor ou Plano de Contas inválido'}), 400
+
+    try:
+        # Upsert compras_lote
+        db.execute('''
+            INSERT INTO compras_lote (id_lote, id_fornecedor, id_plano_contas, num_doc, observacao,
+                                      valor_total, data_emissao, data_pagamento, valor_pago, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id_lote) DO UPDATE SET
+                id_fornecedor=excluded.id_fornecedor,
+                id_plano_contas=excluded.id_plano_contas,
+                num_doc=excluded.num_doc,
+                observacao=excluded.observacao,
+                valor_total=excluded.valor_total,
+                data_emissao=excluded.data_emissao,
+                data_pagamento=excluded.data_pagamento,
+                valor_pago=excluded.valor_pago,
+                updated_at=CURRENT_TIMESTAMP
+        ''', (
+            id_lote, id_fornecedor, id_plano, num_doc, observacao,
+            valor_total, data_emissao,
+            pagamento.get('data_pagamento') if pagamento else None,
+            pagamento.get('valor_pago') if pagamento else None
+        ))
+
+        # Substitui parcelas
+        db.execute('DELETE FROM compras_parcelas WHERE id_lote = ?', (id_lote,))
+        for parc in parcelas:
+            db.execute('''
+                INSERT INTO compras_parcelas (id_lote, parcela_num, valor, data_vencimento, data_pagamento, valor_pago)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                id_lote,
+                int(parc.get('parcela_num') or 0),
+                float(parc.get('valor') or 0),
+                parc.get('data_vencimento'),
+                None,
+                None
+            ))
+
+        db.commit()
+        return jsonify({'sucesso': True})
+    except Exception as e:
+        db.rollback()
         return jsonify({'erro': str(e)}), 500
 
 

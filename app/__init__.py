@@ -1,6 +1,7 @@
 import os
+from datetime import date, datetime, timedelta
 from flask import Flask, jsonify, render_template, session
-from .db import init_db
+from .db import init_db, get_db
 from .utils import format_reais, format_datetime_br
 
 
@@ -63,6 +64,80 @@ def create_app(config_object=None):
 
     # Database
     init_db(app)
+
+    # Snapshot diário do dia anterior (preenche gaps até ontem)
+    def _gerar_snapshot_dia(db, data_ref):
+        sql = '''
+            SELECT es.produto_id, SUM(es.saldo) AS saldo, p.preco_custo
+            FROM estoque_saldos es
+            JOIN produtos p ON p.id = es.produto_id
+            WHERE p.ativo = 1 AND p.controla_estoque = 1
+            GROUP BY es.produto_id
+        '''
+        rows = db.execute(sql).fetchall()
+        inseridos = 0
+        for r in rows:
+            saldo = float(r['saldo'] or 0)
+            if saldo <= 0:
+                continue
+            preco = float(r['preco_custo'] or 0)
+            valor = saldo * preco
+            db.execute(
+                '''
+                INSERT OR IGNORE INTO saldos_historico 
+                (data_ref, produto_id, quantidade, preco_custo_unitario, valor_total)
+                VALUES (?, ?, ?, ?, ?)
+                ''',
+                (data_ref.isoformat(), r['produto_id'], saldo, preco, valor)
+            )
+            inseridos += 1
+
+        db.execute(
+            '''
+            INSERT INTO logs_auditoria (acao, descricao, data_hora)
+            VALUES (?, ?, ?)
+            ''',
+            (
+                'SNAPSHOT_SALDO',
+                f"Snapshot gerado para {data_ref.isoformat()}: {inseridos} produto(s)",
+                datetime.now().isoformat()
+            )
+        )
+
+    def _gerar_snapshots_pendentes():
+        ontem = date.today() - timedelta(days=1)
+        if ontem < date(1970, 1, 1):  # guard-rail
+            return
+
+        db = get_db()
+        row = db.execute('SELECT MAX(data_ref) AS max_ref FROM saldos_historico').fetchone()
+        max_ref = row['max_ref'] if row else None
+
+        if max_ref:
+            try:
+                inicio = date.fromisoformat(max_ref) + timedelta(days=1)
+            except ValueError:
+                inicio = ontem
+        else:
+            inicio = ontem
+
+        if inicio > ontem:
+            return
+
+        dia = inicio
+        while dia <= ontem:
+            _gerar_snapshot_dia(db, dia)
+            dia += timedelta(days=1)
+
+        db.commit()
+
+    with app.app_context():
+        try:
+            _gerar_snapshots_pendentes()
+        except Exception:
+            # Não bloquear startup; logar no stderr
+            import traceback
+            traceback.print_exc()
 
     # Filters
     app.add_template_filter(format_reais, name='reais')

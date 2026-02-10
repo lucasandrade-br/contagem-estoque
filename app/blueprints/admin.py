@@ -18,6 +18,92 @@ bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 # Helpers
 
+def ensure_finance_schema(db):
+    cols = [row['name'] for row in db.execute('PRAGMA table_info(lotes_movimentacao)').fetchall()]
+    if 'exportado_financeiro' not in cols:
+        db.execute("ALTER TABLE lotes_movimentacao ADD COLUMN exportado_financeiro INTEGER NOT NULL DEFAULT 0")
+
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS fornecedores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            cnpj TEXT,
+            ie TEXT,
+            contato TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT
+        )
+    ''')
+
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS planos_contas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT,
+            descricao TEXT NOT NULL,
+            tipo TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT
+        )
+    ''')
+
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS compras_lote (
+            id_lote INTEGER PRIMARY KEY,
+            id_fornecedor INTEGER NOT NULL,
+            id_plano_contas INTEGER NOT NULL,
+            num_doc TEXT,
+            observacao TEXT,
+            valor_total REAL NOT NULL,
+            data_emissao TEXT,
+            data_vencimento TEXT,
+            data_pagamento TEXT,
+            valor_pago REAL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT,
+            FOREIGN KEY (id_lote) REFERENCES lotes_movimentacao(id),
+            FOREIGN KEY (id_fornecedor) REFERENCES fornecedores(id),
+            FOREIGN KEY (id_plano_contas) REFERENCES planos_contas(id)
+        )
+    ''')
+
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS compras_parcelas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_lote INTEGER NOT NULL,
+            parcela_num INTEGER NOT NULL,
+            valor REAL NOT NULL,
+            data_vencimento TEXT NOT NULL,
+            data_pagamento TEXT,
+            valor_pago REAL,
+            FOREIGN KEY (id_lote) REFERENCES lotes_movimentacao(id)
+        )
+    ''')
+    db.execute('CREATE INDEX IF NOT EXISTS idx_compras_parcelas_lote ON compras_parcelas(id_lote)')
+
+
+def ensure_materias_primas_schema(db):
+    cols = [row['name'] for row in db.execute('PRAGMA table_info(produtos)').fetchall()]
+    if 'materia_prima_id' not in cols:
+        db.execute("ALTER TABLE produtos ADD COLUMN materia_prima_id INTEGER")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_produtos_materia_prima ON produtos(materia_prima_id)")
+
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS materias_primas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            codigo_interno TEXT,
+            descricao TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT
+        )
+    ''')
+
+    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_materias_primas_nome ON materias_primas(nome)")
+    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_materias_primas_codigo ON materias_primas(codigo_interno) WHERE codigo_interno IS NOT NULL")
+
 def gerente_required():
     return session.get('is_gerente')
 
@@ -532,8 +618,6 @@ def detalhe_produto_inventario(produto_id):
 
 
 # Ações de inventário
-
-
 @bp.route('/abrir_inventario', methods=['POST'])
 def abrir_inventario():
     if not gerente_required():
@@ -1162,8 +1246,6 @@ def exportar_preview_fechamento():
 
 
 # Gestão de produtos
-
-
 @bp.route('/produtos', methods=['GET', 'POST'])
 def admin_produtos():
     is_autorizado = session.get('is_gerente') or session.get('funcao') == 'Estoquista Chefe'
@@ -1173,6 +1255,7 @@ def admin_produtos():
         return redirect(url_for('auth.login_admin'))
 
     db = get_db()
+    ensure_materias_primas_schema(db)
 
     if request.method == 'POST':
         produto_id = request.form.get('produto_id')
@@ -1185,6 +1268,8 @@ def admin_produtos():
         preco_venda = float(request.form.get('preco_venda', 0) or 0)
         ativo = 1 if request.form.get('ativo') else 0
         unidades_permitidas = request.form.getlist('unidades_permitidas')
+        materia_prima_id_raw = request.form.get('materia_prima_id')
+        materia_prima_id = int(materia_prima_id_raw) if materia_prima_id_raw else None
 
         if not nome or not id_unidade_padrao:
             error_msg = 'Nome e Unidade Padrão são obrigatórios.'
@@ -1196,14 +1281,14 @@ def admin_produtos():
                 if produto_id:
                     db.execute('''
                         UPDATE produtos
-                        SET nome = ?, categoria = ?, id_unidade_padrao = ?, id_erp = ?, gtin = ?, preco_custo = ?, preco_venda = ?, ativo = ?
+                        SET nome = ?, categoria = ?, id_unidade_padrao = ?, id_erp = ?, gtin = ?, preco_custo = ?, preco_venda = ?, ativo = ?, materia_prima_id = ?
                         WHERE id = ?
-                    ''', (nome, categoria or None, int(id_unidade_padrao), id_erp, gtin, preco_custo, preco_venda, ativo, int(produto_id)))
+                    ''', (nome, categoria or None, int(id_unidade_padrao), id_erp, gtin, preco_custo, preco_venda, ativo, materia_prima_id, int(produto_id)))
                 else:
                     cursor = db.execute('''
-                        INSERT INTO produtos (nome, categoria, id_unidade_padrao, id_erp, gtin, preco_custo, preco_venda, ativo)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (nome, categoria or None, int(id_unidade_padrao), id_erp, gtin, preco_custo, preco_venda, ativo))
+                        INSERT INTO produtos (nome, categoria, id_unidade_padrao, id_erp, gtin, preco_custo, preco_venda, ativo, materia_prima_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (nome, categoria or None, int(id_unidade_padrao), id_erp, gtin, preco_custo, preco_venda, ativo, materia_prima_id))
                     produto_id = cursor.lastrowid
 
                 db.execute('DELETE FROM produtos_unidades WHERE id_produto = ?', (produto_id,))
@@ -1259,11 +1344,13 @@ def admin_produtos():
     '''
     produtos = [dict(r) for r in db.execute(sql_data, params + [itens_por_pagina, offset]).fetchall()]
     unidades = [dict(r) for r in db.execute("SELECT * FROM unidades_medida ORDER BY sigla").fetchall()]
+    materias_primas = [dict(r) for r in db.execute("SELECT * FROM materias_primas WHERE ativo = 1 ORDER BY nome").fetchall()]
 
     return render_template(
         'admin/admin_produtos.html',
         produtos=produtos,
         unidades=unidades,
+        materias_primas=materias_primas,
         busca=termo,
         pagina_atual=pagina,
         total_paginas=total_paginas,
@@ -1278,6 +1365,7 @@ def admin_produto_json(prod_id):
         return jsonify({'erro': 'Acesso negado'}), 403
 
     db = get_db()
+    ensure_materias_primas_schema(db)
     prod = db.execute("SELECT * FROM produtos WHERE id = ?", (prod_id,)).fetchone()
     if not prod:
         return jsonify({'erro': 'Produto não encontrado'}), 404
@@ -1576,6 +1664,287 @@ def admin_categorias():
     return render_template(
         'admin/admin_categorias.html',
         categorias=categorias,
+        is_gerente=True
+    )
+
+
+@bp.route('/materias_primas', methods=['GET', 'POST'])
+def admin_materias_primas():
+    """Gerencia matérias-primas e suas informações básicas."""
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+
+    db = get_db()
+    ensure_materias_primas_schema(db)
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        materia_id = request.form.get('materia_prima_id')
+
+        if action == 'delete':
+            usos = db.execute(
+                'SELECT COUNT(*) as t FROM produtos WHERE materia_prima_id = ?',
+                (materia_id,)
+            ).fetchone()['t']
+
+            if usos and usos > 0:
+                flash('❌ Não é possível desativar: existem produtos vinculados.', 'error')
+            else:
+                db.execute(
+                    'UPDATE materias_primas SET ativo = 0, updated_at = ? WHERE id = ?',
+                    (datetime.now().isoformat(sep=' ', timespec='seconds'), materia_id)
+                )
+                db.commit()
+                flash('✅ Matéria-prima desativada com sucesso.', 'success')
+
+        elif action == 'save':
+            nome = request.form.get('nome', '').strip()
+            codigo_interno = request.form.get('codigo_interno', '').strip() or None
+            descricao = request.form.get('descricao', '').strip() or None
+
+            if not nome:
+                flash('❌ Nome é obrigatório.', 'error')
+            else:
+                try:
+                    if materia_id:
+                        db.execute('''
+                            UPDATE materias_primas
+                            SET nome = ?, codigo_interno = ?, descricao = ?, updated_at = ?
+                            WHERE id = ?
+                        ''', (nome, codigo_interno, descricao, datetime.now().isoformat(sep=' ', timespec='seconds'), materia_id))
+                        flash('✅ Matéria-prima atualizada com sucesso.', 'success')
+                    else:
+                        db.execute('''
+                            INSERT INTO materias_primas (nome, codigo_interno, descricao, ativo)
+                            VALUES (?, ?, ?, 1)
+                        ''', (nome, codigo_interno, descricao))
+                        flash('✅ Matéria-prima criada com sucesso.', 'success')
+
+                    db.commit()
+                except sqlite3.IntegrityError:
+                    flash('❌ Nome ou código interno já cadastrado.', 'error')
+
+    sql_materias = '''
+        SELECT mp.id, mp.nome, mp.codigo_interno, mp.descricao, mp.created_at, mp.updated_at,
+               COUNT(p.id) as total_produtos
+        FROM materias_primas mp
+        LEFT JOIN produtos p ON p.materia_prima_id = mp.id
+        WHERE mp.ativo = 1
+        GROUP BY mp.id
+        ORDER BY mp.nome
+    '''
+    materias_primas = [dict(r) for r in db.execute(sql_materias).fetchall()]
+
+    return render_template(
+        'admin/admin_materias_primas.html',
+        materias_primas=materias_primas,
+        is_gerente=True
+    )
+
+
+@bp.route('/materias_primas/modelo', methods=['GET'])
+def modelo_materias_primas():
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+
+    df = pd.DataFrame([
+        {'NOME': 'Açúcar', 'CODIGO_INTERNO': 'MP-001', 'DESCRICAO': 'Granulado', 'ATIVO': 1},
+        {'NOME': 'Farinha de Trigo', 'CODIGO_INTERNO': 'MP-002', 'DESCRICAO': 'Tipo 1', 'ATIVO': 1},
+    ], columns=['NOME', 'CODIGO_INTERNO', 'DESCRICAO', 'ATIVO'])
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='MateriasPrimas', index=False)
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='modelo_materias_primas.xlsx'
+    )
+
+
+@bp.route('/materias_primas/exportar', methods=['GET'])
+def exportar_materias_primas():
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+
+    db = get_db()
+    ensure_materias_primas_schema(db)
+
+    rows = db.execute('''
+        SELECT mp.id, mp.nome, mp.codigo_interno, mp.descricao, mp.ativo,
+               mp.created_at, mp.updated_at,
+               COUNT(p.id) as total_produtos
+        FROM materias_primas mp
+        LEFT JOIN produtos p ON p.materia_prima_id = mp.id
+        GROUP BY mp.id
+        ORDER BY mp.nome
+    ''').fetchall()
+
+    df = pd.DataFrame([dict(r) for r in rows])
+    if df.empty:
+        df = pd.DataFrame(columns=['id', 'nome', 'codigo_interno', 'descricao', 'ativo', 'created_at', 'updated_at', 'total_produtos'])
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='MateriasPrimas', index=False)
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='materias_primas.xlsx'
+    )
+
+
+@bp.route('/materias_primas/importar', methods=['POST'])
+def importar_materias_primas():
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+
+    file = request.files.get('arquivo')
+    if not file or not file.filename.endswith(('.xlsx', '.xls')):
+        flash('Envie um arquivo .xlsx', 'error')
+        return redirect(url_for('admin.admin_materias_primas'))
+
+    try:
+        df = pd.read_excel(file).fillna('')
+    except Exception as exc:
+        flash(f'Erro ao ler arquivo: {exc}', 'error')
+        return redirect(url_for('admin.admin_materias_primas'))
+
+    db = get_db()
+    ensure_materias_primas_schema(db)
+
+    criados, atualizados, ignorados = 0, 0, 0
+    for _, row in df.iterrows():
+        nome = str(row.get('NOME', '')).strip()
+        if not nome:
+            ignorados += 1
+            continue
+
+        codigo = str(row.get('CODIGO_INTERNO', '') or row.get('CODIGO', '')).strip()
+        codigo_val = codigo if codigo else None
+        descricao = str(row.get('DESCRICAO', '') or row.get('DESCRIÇÃO', '')).strip() or None
+        ativo_val = str(row.get('ATIVO', '1')).strip().upper()
+        ativo = 0 if ativo_val in ['0', 'N', 'NAO', 'NÃO', 'INATIVO'] else 1
+
+        exists = None
+        if codigo_val:
+            exists = db.execute(
+                'SELECT id FROM materias_primas WHERE codigo_interno = ?',
+                (codigo_val,)
+            ).fetchone()
+        if not exists:
+            exists = db.execute(
+                'SELECT id FROM materias_primas WHERE nome = ?',
+                (nome,)
+            ).fetchone()
+
+        if exists:
+            db.execute('''
+                UPDATE materias_primas
+                SET nome = ?, codigo_interno = ?, descricao = ?, ativo = ?, updated_at = ?
+                WHERE id = ?
+            ''', (nome, codigo_val, descricao, ativo, datetime.now().isoformat(sep=' ', timespec='seconds'), exists['id']))
+            atualizados += 1
+        else:
+            try:
+                db.execute('''
+                    INSERT INTO materias_primas (nome, codigo_interno, descricao, ativo)
+                    VALUES (?, ?, ?, ?)
+                ''', (nome, codigo_val, descricao, ativo))
+                criados += 1
+            except sqlite3.IntegrityError:
+                ignorados += 1
+                continue
+
+    db.commit()
+    flash(f'Importação concluída: {criados} criados, {atualizados} atualizados, {ignorados} ignorados.', 'success')
+    return redirect(url_for('admin.admin_materias_primas'))
+
+
+@bp.route('/materia_prima/<int:materia_id>/produtos', methods=['GET', 'POST'])
+def materia_prima_produtos(materia_id):
+    """Gerencia vínculos 1:N de produtos para uma matéria-prima."""
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+
+    db = get_db()
+    ensure_materias_primas_schema(db)
+
+    materia = db.execute(
+        'SELECT * FROM materias_primas WHERE id = ? AND ativo = 1',
+        (materia_id,)
+    ).fetchone()
+
+    if not materia:
+        flash('❌ Matéria-prima não encontrada ou inativa.', 'error')
+        return redirect(url_for('admin.admin_materias_primas'))
+
+    materia = dict(materia)
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'add_multiple':
+            produtos_ids = request.form.getlist('produtos_ids[]')
+            if produtos_ids:
+                movidos = 0
+                for pid in produtos_ids:
+                    db.execute(
+                        'UPDATE produtos SET materia_prima_id = ? WHERE id = ?',
+                        (materia_id, pid)
+                    )
+                    movidos += 1
+                db.commit()
+                flash(f'✅ {movidos} produto(s) vinculados à matéria-prima.', 'success')
+            else:
+                flash('Selecione pelo menos um produto.', 'warning')
+
+        elif action == 'remove':
+            produto_id = request.form.get('produto_id')
+            db.execute(
+                'UPDATE produtos SET materia_prima_id = NULL WHERE id = ?',
+                (produto_id,)
+            )
+            db.commit()
+            flash('✅ Vínculo removido.', 'success')
+
+        return redirect(url_for('admin.materia_prima_produtos', materia_id=materia_id))
+
+    produtos_associados = [
+        dict(r) for r in db.execute('''
+            SELECT p.id, p.nome, p.id_erp, p.gtin, p.categoria as categoria_produto,
+                   u.sigla as unidade_padrao, p.ativo
+            FROM produtos p
+            LEFT JOIN unidades_medida u ON p.id_unidade_padrao = u.id
+            WHERE p.materia_prima_id = ?
+            ORDER BY p.nome
+        ''', (materia_id,)).fetchall()
+    ]
+
+    produtos_disponiveis = [
+        dict(r) for r in db.execute('''
+            SELECT p.id, p.nome, p.id_erp, p.gtin, p.categoria as categoria_produto,
+                   u.sigla as unidade_padrao,
+                   mp.nome as materia_prima_atual
+            FROM produtos p
+            LEFT JOIN unidades_medida u ON p.id_unidade_padrao = u.id
+            LEFT JOIN materias_primas mp ON p.materia_prima_id = mp.id
+            WHERE p.ativo = 1 AND (p.materia_prima_id IS NULL OR p.materia_prima_id != ?)
+            ORDER BY p.nome
+        ''', (materia_id,)).fetchall()
+    ]
+
+    return render_template(
+        'admin/materia_prima_produtos.html',
+        materia=materia,
+        produtos_associados=produtos_associados,
+        produtos_disponiveis=produtos_disponiveis,
         is_gerente=True
     )
 
@@ -2033,6 +2402,181 @@ def lotes_pendentes():
     return render_template('admin/lotes_pendentes.html', lotes=lotes_com_aviso)
 
 
+@bp.route('/lotes/exportar', methods=['GET', 'POST'])
+def lotes_exportar():
+    """Tela para selecionar lotes e exportar dados financeiros em XLSX."""
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+
+    db = get_db()
+    ensure_finance_schema(db)
+    status = request.args.get('status', 'APROVADO').strip()
+    tipo = request.args.get('tipo', '').strip()
+    data_inicio = request.args.get('data_inicio', '').strip()
+    data_fim = request.args.get('data_fim', '').strip()
+
+    where = ['1=1']
+    params = []
+
+    if status:
+        where.append('l.status = ?')
+        params.append(status)
+
+    if tipo:
+        where.append('l.tipo = ?')
+        params.append(tipo)
+
+    if data_inicio:
+        where.append("DATE(l.data_criacao) >= ?")
+        params.append(data_inicio)
+
+    if data_fim:
+        where.append("DATE(l.data_criacao) <= ?")
+        params.append(data_fim)
+
+    where_sql = ' AND '.join(where)
+
+    sql = f'''
+        SELECT 
+            l.id, l.tipo, l.motivo, l.status, l.data_criacao, l.data_finalizacao,
+            l.exportado_financeiro,
+            u.nome as usuario_nome,
+            cl.valor_total,
+            cl.num_doc,
+            f.nome as fornecedor_nome,
+            f.cnpj as fornecedor_cnpj,
+            pc.codigo as plano_codigo,
+            pc.descricao as plano_descricao
+        FROM lotes_movimentacao l
+        LEFT JOIN usuarios u ON l.id_usuario = u.id
+        LEFT JOIN compras_lote cl ON cl.id_lote = l.id
+        LEFT JOIN fornecedores f ON cl.id_fornecedor = f.id
+        LEFT JOIN planos_contas pc ON cl.id_plano_contas = pc.id
+        WHERE {where_sql}
+        ORDER BY l.data_criacao DESC
+        LIMIT 300
+    '''
+
+    lotes = [dict(r) for r in db.execute(sql, params).fetchall()]
+    status_opcoes = ['APROVADO', 'FINALIZADO', 'PENDENTE_APROVACAO', 'RASCUNHO', 'REPROVADO']
+    tipos = ['ENTRADA', 'SAIDA', 'TRANSFERENCIA']
+
+    if request.method == 'POST':
+        ids_brutos = request.form.getlist('lote_ids')
+        if not ids_brutos:
+            flash('Selecione pelo menos um lote para exportar.', 'error')
+            return redirect(url_for('admin.lotes_exportar'))
+
+        try:
+            ids = [int(x) for x in ids_brutos]
+        except ValueError:
+            flash('IDs de lote inválidos.', 'error')
+            return redirect(url_for('admin.lotes_exportar'))
+
+        placeholders = ','.join(['?'] * len(ids))
+
+        lotes_sel = db.execute(f'''
+            SELECT 
+                l.id, l.tipo, l.motivo, l.status, l.data_criacao, l.data_finalizacao,
+                l.origem, l.observacao, l.exportado_financeiro,
+                u.nome as usuario_nome,
+                cl.valor_total, cl.num_doc, cl.observacao as observacao_fin,
+                cl.data_emissao, cl.data_pagamento,
+                f.nome as fornecedor_nome, f.cnpj as fornecedor_cnpj, f.ie as fornecedor_ie,
+                pc.codigo as plano_codigo, pc.descricao as plano_descricao
+            FROM lotes_movimentacao l
+            LEFT JOIN usuarios u ON l.id_usuario = u.id
+            LEFT JOIN compras_lote cl ON cl.id_lote = l.id
+            LEFT JOIN fornecedores f ON cl.id_fornecedor = f.id
+            LEFT JOIN planos_contas pc ON cl.id_plano_contas = pc.id
+            WHERE l.id IN ({placeholders})
+            ORDER BY l.data_criacao ASC
+        ''', ids).fetchall()
+
+        if not lotes_sel:
+            flash('Nenhum lote encontrado para exportar.', 'error')
+            return redirect(url_for('admin.lotes_exportar'))
+
+        parcelas = db.execute(f'''
+            SELECT id_lote, parcela_num, valor, data_vencimento, data_pagamento, valor_pago
+            FROM compras_parcelas
+            WHERE id_lote IN ({placeholders})
+            ORDER BY id_lote, parcela_num
+        ''', ids).fetchall()
+
+        # Abas consolidadas: gerar única aba "Financeiro" com uma linha por parcela
+        parcelas_por_lote = {}
+        for p in parcelas:
+            parcelas_por_lote.setdefault(p['id_lote'], []).append(p)
+
+        linhas_financeiro = []
+        for r in lotes_sel:
+            plano_str = r['plano_codigo']  
+
+            parcelas_lote = parcelas_por_lote.get(r['id'], [])
+            if parcelas_lote:
+                for parc in parcelas_lote:
+                    linhas_financeiro.append({
+                        'DATA_EMISSAO': r['data_emissao'],
+                        'FORNECEDOR': r['fornecedor_nome'],
+                        'NUM_DOC': r['num_doc'],
+                        'PLANO_CONTAS': plano_str,
+                        'OBSERVACAO': r['observacao_fin'],
+                        'VALOR_PARCELA': parc['valor'],
+                        'DATA_VENCIMENTO': parc['data_vencimento'],
+                        'DATA_PAGAMENTO': parc['data_pagamento'],
+                        'VALOR_PAGO': parc['valor_pago'],
+                        'NUM_PARCELA': parc['parcela_num']
+                    })
+            else:
+                linhas_financeiro.append({
+                    'DATA_EMISSAO': r['data_emissao'],
+                    'FORNECEDOR': r['fornecedor_nome'],
+                    'NUM_DOC': r['num_doc'],
+                    'PLANO_CONTAS': plano_str,
+                    'OBSERVACAO': r['observacao_fin'],
+                    'VALOR_PARCELA': r['valor_total'],
+                    'DATA_VENCIMENTO': None,
+                    'DATA_PAGAMENTO': r['data_pagamento'],
+                    'VALOR_PAGO': None,
+                    'NUM_PARCELA': 1
+                })
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_fin = pd.DataFrame(linhas_financeiro, columns=[
+                'DATA_EMISSAO', 'FORNECEDOR', 'NUM_DOC', 'PLANO_CONTAS', 'OBSERVACAO',
+                'VALOR_PARCELA', 'DATA_VENCIMENTO', 'DATA_PAGAMENTO', 'VALOR_PAGO', 'NUM_PARCELA'
+            ])
+            df_fin.to_excel(writer, sheet_name='Financeiro', index=False)
+
+        output.seek(0)
+
+        db.execute(f"UPDATE lotes_movimentacao SET exportado_financeiro = 1 WHERE id IN ({placeholders})", ids)
+        db.commit()
+
+        filename = f"lotes_financeiro_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    return render_template(
+        'admin/lotes_exportar.html',
+        lotes=lotes,
+        status_opcoes=status_opcoes,
+        tipos=tipos,
+        filtros={
+            'status': status,
+            'tipo': tipo,
+            'data_inicio': data_inicio,
+            'data_fim': data_fim
+        }
+    )
+
+
 @bp.route('/lotes/<int:id_lote>')
 def lote_detalhe(id_lote):
     """Detalhe de um lote para aprovação/visualização."""
@@ -2040,6 +2584,7 @@ def lote_detalhe(id_lote):
         return redirect(url_for('auth.login_admin'))
     
     db = get_db()
+    ensure_finance_schema(db)
     
     # Buscar lote com dados do criador e aprovador
     lote = db.execute('''
@@ -2081,6 +2626,22 @@ def lote_detalhe(id_lote):
         WHERE i.id_lote = ?
         ORDER BY i.created_at
     ''', (id_lote,)).fetchall()
+
+    # Dados financeiros (se existirem)
+    financeiro_row = db.execute('SELECT * FROM compras_lote WHERE id_lote = ?', (id_lote,)).fetchone()
+    parcelas_fin = db.execute('''
+        SELECT parcela_num, valor, data_vencimento, data_pagamento, valor_pago
+        FROM compras_parcelas
+        WHERE id_lote = ?
+        ORDER BY parcela_num
+    ''', (id_lote,)).fetchall()
+
+    # Valor total estimado dos itens para prefill do financeiro
+    total_itens_valor = 0.0
+    for it in itens:
+        qtd_base = (it['quantidade_original'] or 0) * (it['fator_conversao'] or 1)
+        preco = it['preco_custo_unitario'] or 0
+        total_itens_valor += qtd_base * preco
     
     # Verificar lotes anteriores pendentes
     anteriores = db.execute('''
@@ -2095,7 +2656,10 @@ def lote_detalhe(id_lote):
         'admin/lote_detalhe.html', 
         lote=dict(lote),
         itens=[dict(i) for i in itens],
-        lotes_anteriores_pendentes=anteriores['total']
+        lotes_anteriores_pendentes=anteriores['total'],
+        financeiro=dict(financeiro_row) if financeiro_row else None,
+        parcelas_fin=[dict(p) for p in parcelas_fin],
+        valor_itens_total=round(total_itens_valor, 2)
     )
 
 
@@ -2583,3 +3147,210 @@ def produto_kardex(produto_id):
         is_gerente=True
     )
 
+
+# -------------------------------------------------------
+# Admin Fornecedores e Planos de Contas + Import XLSX
+# -------------------------------------------------------
+
+
+@bp.route('/fornecedores', methods=['GET'])
+def admin_fornecedores():
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+    db = get_db()
+    ensure_finance_schema(db)
+    fornecedores = [dict(r) for r in db.execute('SELECT * FROM fornecedores ORDER BY nome').fetchall()]
+    return render_template('admin/fornecedores.html', fornecedores=fornecedores, is_gerente=True)
+
+
+@bp.route('/fornecedores/salvar', methods=['POST'])
+def salvar_fornecedor():
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+    db = get_db()
+    ensure_finance_schema(db)
+    fid = request.form.get('id')
+    nome = (request.form.get('nome') or '').strip()
+    cnpj = (request.form.get('cnpj') or '').strip()
+    ie = (request.form.get('ie') or '').strip()
+    contato = (request.form.get('contato') or '').strip()
+    ativo = 1 if request.form.get('ativo') else 0
+    if not nome:
+        flash('Nome é obrigatório', 'error')
+        return redirect(url_for('admin.admin_fornecedores'))
+    try:
+        if fid:
+            db.execute('''UPDATE fornecedores SET nome=?, cnpj=?, ie=?, contato=?, ativo=?, updated_at=CURRENT_TIMESTAMP WHERE id=?''',
+                       (nome, cnpj, ie, contato, ativo, fid))
+        else:
+            db.execute('''INSERT INTO fornecedores (nome, cnpj, ie, contato, ativo) VALUES (?, ?, ?, ?, ?)''',
+                       (nome, cnpj, ie, contato, ativo))
+        db.commit()
+        flash('Fornecedor salvo', 'success')
+    except Exception as exc:
+        db.rollback()
+        flash(f'Erro ao salvar: {exc}', 'error')
+    return redirect(url_for('admin.admin_fornecedores'))
+
+
+@bp.route('/fornecedores/importar', methods=['POST'])
+def importar_fornecedores():
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+    file = request.files.get('arquivo')
+    if not file or not file.filename.endswith(('.xlsx', '.xls')):
+        flash('Envie um arquivo .xlsx', 'error')
+        return redirect(url_for('admin.admin_fornecedores'))
+    try:
+        df = pd.read_excel(file).fillna('')
+    except Exception as exc:
+        flash(f'Erro ao ler arquivo: {exc}', 'error')
+        return redirect(url_for('admin.admin_fornecedores'))
+    db = get_db()
+    ensure_finance_schema(db)
+    criados = 0
+    atualizados = 0
+    for _, row in df.iterrows():
+        nome = str(row.get('NOME', '')).strip()
+        if not nome:
+            continue
+        cnpj = str(row.get('CNPJ', '')).strip()
+        ie = str(row.get('IE', '')).strip()
+        contato = str(row.get('CONTATO', '')).strip()
+        ativo_val = str(row.get('ATIVO', '1')).strip().upper()
+        ativo = 0 if ativo_val in ['0', 'N', 'NAO', 'NÃO', 'INATIVO'] else 1
+        exists = db.execute('SELECT id FROM fornecedores WHERE nome = ?', (nome,)).fetchone()
+        if exists:
+            db.execute('''UPDATE fornecedores SET cnpj=?, ie=?, contato=?, ativo=?, updated_at=CURRENT_TIMESTAMP WHERE id=?''',
+                       (cnpj, ie, contato, ativo, exists['id']))
+            atualizados += 1
+        else:
+            db.execute('''INSERT INTO fornecedores (nome, cnpj, ie, contato, ativo) VALUES (?, ?, ?, ?, ?)''',
+                       (nome, cnpj, ie, contato, ativo))
+            criados += 1
+    db.commit()
+    flash(f'Importação concluída: {criados} criados, {atualizados} atualizados.', 'success')
+    return redirect(url_for('admin.admin_fornecedores'))
+
+
+@bp.route('/fornecedores/modelo', methods=['GET'])
+def modelo_fornecedores():
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+
+    df = pd.DataFrame([
+        {'NOME': 'Padaria Exemplo', 'CNPJ': '00.000.000/0000-00', 'IE': 'ISENTO', 'CONTATO': '(11) 99999-9999', 'ATIVO': 1},
+        {'NOME': 'Fornecedor B', 'CNPJ': '', 'IE': '', 'CONTATO': 'fornecedor@exemplo.com', 'ATIVO': 1},
+    ], columns=['NOME', 'CNPJ', 'IE', 'CONTATO', 'ATIVO'])
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Fornecedores', index=False)
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='modelo_fornecedores.xlsx'
+    )
+
+
+@bp.route('/planos_contas', methods=['GET'])
+def admin_planos_contas():
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+    db = get_db()
+    ensure_finance_schema(db)
+    planos = [dict(r) for r in db.execute('SELECT * FROM planos_contas ORDER BY descricao').fetchall()]
+    return render_template('admin/planos_contas.html', planos=planos, is_gerente=True)
+
+
+@bp.route('/planos_contas/salvar', methods=['POST'])
+def salvar_plano_contas():
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+    db = get_db()
+    ensure_finance_schema(db)
+    pid = request.form.get('id')
+    codigo = (request.form.get('codigo') or '').strip()
+    descricao = (request.form.get('descricao') or '').strip()
+    tipo = (request.form.get('tipo') or '').strip()
+    ativo = 1 if request.form.get('ativo') else 0
+    if not descricao:
+        flash('Descrição é obrigatória', 'error')
+        return redirect(url_for('admin.admin_planos_contas'))
+    try:
+        if pid:
+            db.execute('''UPDATE planos_contas SET codigo=?, descricao=?, tipo=?, ativo=?, updated_at=CURRENT_TIMESTAMP WHERE id=?''',
+                       (codigo, descricao, tipo, ativo, pid))
+        else:
+            db.execute('''INSERT INTO planos_contas (codigo, descricao, tipo, ativo) VALUES (?, ?, ?, ?)''',
+                       (codigo, descricao, tipo, ativo))
+        db.commit()
+        flash('Plano salvo', 'success')
+    except Exception as exc:
+        db.rollback()
+        flash(f'Erro ao salvar: {exc}', 'error')
+    return redirect(url_for('admin.admin_planos_contas'))
+
+
+@bp.route('/planos_contas/importar', methods=['POST'])
+def importar_planos_contas():
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+    file = request.files.get('arquivo')
+    if not file or not file.filename.endswith(('.xlsx', '.xls')):
+        flash('Envie um arquivo .xlsx', 'error')
+        return redirect(url_for('admin.admin_planos_contas'))
+    try:
+        df = pd.read_excel(file).fillna('')
+    except Exception as exc:
+        flash(f'Erro ao ler arquivo: {exc}', 'error')
+        return redirect(url_for('admin.admin_planos_contas'))
+    db = get_db()
+    ensure_finance_schema(db)
+    criados, atualizados = 0, 0
+    for _, row in df.iterrows():
+        descricao = str(row.get('DESCRICAO', '')).strip() or str(row.get('DESCRIÇÃO', '')).strip()
+        if not descricao:
+            continue
+        codigo = str(row.get('CODIGO', '') or row.get('CÓDIGO', '')).strip()
+        tipo = str(row.get('TIPO', '')).strip()
+        ativo_val = str(row.get('ATIVO', '1')).strip().upper()
+        ativo = 0 if ativo_val in ['0', 'N', 'NAO', 'NÃO', 'INATIVO'] else 1
+        exists = db.execute('SELECT id FROM planos_contas WHERE descricao = ?', (descricao,)).fetchone()
+        if exists:
+            db.execute('''UPDATE planos_contas SET codigo=?, tipo=?, ativo=?, updated_at=CURRENT_TIMESTAMP WHERE id=?''',
+                       (codigo, tipo, ativo, exists['id']))
+            atualizados += 1
+        else:
+            db.execute('''INSERT INTO planos_contas (codigo, descricao, tipo, ativo) VALUES (?, ?, ?, ?)''',
+                       (codigo, descricao, tipo, ativo))
+            criados += 1
+    db.commit()
+    flash(f'Importação concluída: {criados} criados, {atualizados} atualizados.', 'success')
+    return redirect(url_for('admin.admin_planos_contas'))
+
+
+@bp.route('/planos_contas/modelo', methods=['GET'])
+def modelo_planos_contas():
+    if not gerente_required():
+        return redirect(url_for('auth.login_admin'))
+
+    df = pd.DataFrame([
+        {'CODIGO': '1.1.1', 'DESCRICAO': 'Matéria-prima', 'TIPO': 'Despesa', 'ATIVO': 1},
+        {'CODIGO': '1.1.2', 'DESCRICAO': 'Energia elétrica', 'TIPO': 'Despesa', 'ATIVO': 1},
+    ], columns=['CODIGO', 'DESCRICAO', 'TIPO', 'ATIVO'])
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='PlanosContas', index=False)
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='modelo_planos_contas.xlsx'
+    )

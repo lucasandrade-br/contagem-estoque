@@ -1,3 +1,4 @@
+{% set materias_lista = materias_primas if materias_primas is defined else [] %}
 <div id="modalProduto" class="fixed inset-0 bg-black bg-opacity-80 hidden z-50 flex items-center justify-center p-4">
     <div class="bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl transform transition-all max-h-[95vh] overflow-y-auto my-4">
         <form method="POST" action="{{ url_for('admin.admin_produtos') }}" id="formProduto">
@@ -18,16 +19,25 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     
                     <div>
-                        <label class="block text-gray-400 text-sm mb-1">ID ERP (Opcional)</label>
+                        <label class="block text-gray-400 text-sm mb-1">ID Interno (Opcional)</label>
                         <input type="text" name="id_erp" id="prod_iderp" class="w-full bg-slate-700 text-white rounded p-2 border border-slate-600">
                     </div>
                     <div>
-                        <label class="block text-gray-400 text-sm mb-1">GTIN (Opcional)</label>
+                        <label class="block text-gray-400 text-sm mb-1">Código de Barras (Opcional)</label>
                         <input type="text" name="gtin" id="prod_gtin" class="w-full bg-slate-700 text-white rounded p-2 border border-slate-600">
                     </div>
                     <div>
                         <label class="block text-gray-400 text-sm mb-1">Categoria</label>
                         <input type="text" name="categoria" id="prod_categoria" class="w-full bg-slate-700 text-white rounded p-2 border border-slate-600">
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 text-sm mb-1">Matéria-prima (Opcional)</label>
+                        <select name="materia_prima_id" id="prod_materia_prima_id" class="w-full bg-slate-700 text-white rounded p-2 border border-slate-600">
+                            <option value="">Sem matéria-prima definida</option>
+                            {% for mp in materias_lista %}
+                            <option value="{{ mp.id }}">{{ mp.codigo_interno or '—' }} - {{ mp.nome }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                     <div>
                         <label class="block text-gray-400 text-sm mb-1">Status do Produto</label>

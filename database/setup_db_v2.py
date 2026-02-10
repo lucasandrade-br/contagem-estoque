@@ -133,6 +133,24 @@ def criar_tabelas(conn):
         ON produto_categoria_inventario(id_categoria)
     ''')
     
+    # 5c. Tabela materias_primas (para vincular produtos)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS materias_primas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL UNIQUE,
+            codigo_interno TEXT,
+            descricao TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_materias_primas_codigo 
+        ON materias_primas(codigo_interno) WHERE codigo_interno IS NOT NULL
+    ''')
+
     # 5. Tabela produtos - VERSÃO 2.0 com novas colunas
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
@@ -142,6 +160,7 @@ def criar_tabelas(conn):
             nome TEXT NOT NULL,
             categoria TEXT,
             id_unidade_padrao INTEGER NOT NULL,
+            materia_prima_id INTEGER,
             preco_custo REAL DEFAULT 0.0,
             preco_venda REAL DEFAULT 0.0,
             ativo INTEGER DEFAULT 1,
@@ -152,7 +171,8 @@ def criar_tabelas(conn):
             abc_fixo INTEGER DEFAULT 0 CHECK(abc_fixo IN (0, 1)),
             controla_estoque INTEGER DEFAULT 1 CHECK(controla_estoque IN (0, 1)),
             
-            FOREIGN KEY (id_unidade_padrao) REFERENCES unidades_medida(id)
+            FOREIGN KEY (id_unidade_padrao) REFERENCES unidades_medida(id),
+            FOREIGN KEY (materia_prima_id) REFERENCES materias_primas(id)
         )
     ''')
     
@@ -160,6 +180,11 @@ def criar_tabelas(conn):
     cursor.execute('''
         CREATE UNIQUE INDEX IF NOT EXISTS idx_produtos_id_erp 
         ON produtos(id_erp) WHERE id_erp IS NOT NULL
+    ''')
+
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_produtos_materia_prima 
+        ON produtos(materia_prima_id)
     ''')
     
     # Criar índices para performance em consultas por Curva ABC
@@ -206,6 +231,33 @@ def criar_tabelas(conn):
     ''')
     
     print("✓ Tabela estoque_saldos criada")
+
+    # Snapshot diário por produto (estoque valorizado)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS saldos_historico (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_ref DATE NOT NULL,
+            produto_id INTEGER NOT NULL,
+            quantidade REAL NOT NULL,
+            preco_custo_unitario REAL NOT NULL,
+            valor_total REAL NOT NULL,
+            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE,
+            UNIQUE(produto_id, data_ref)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_saldos_historico_data 
+        ON saldos_historico(data_ref)
+    ''')
+
+    cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_saldos_historico_produto 
+        ON saldos_historico(produto_id, data_ref)
+    ''')
+
+    print("✓ Tabela saldos_historico criada")
     
     # 5b. Tabela de relacionamento produtos_unidades (N:N) com fator de conversão
     cursor.execute('''
@@ -382,6 +434,7 @@ def criar_tabelas(conn):
             id_usuario_aprovador INTEGER,
             data_aprovacao DATETIME,
             motivo_rejeicao TEXT,
+            exportado_financeiro INTEGER NOT NULL DEFAULT 0,
             
             FOREIGN KEY (setor_origem_id) REFERENCES setores(id),
             FOREIGN KEY (local_origem_id) REFERENCES locais(id),
@@ -405,6 +458,67 @@ def criar_tabelas(conn):
         CREATE INDEX IF NOT EXISTS idx_lotes_usuario 
         ON lotes_movimentacao(id_usuario)
     ''')
+
+    print("\n🆕 Criando tabelas financeiras (fornecedores, planos, compras)...")
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fornecedores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            cnpj TEXT,
+            ie TEXT,
+            contato TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS planos_contas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT,
+            descricao TEXT NOT NULL,
+            tipo TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS compras_lote (
+            id_lote INTEGER PRIMARY KEY,
+            id_fornecedor INTEGER NOT NULL,
+            id_plano_contas INTEGER NOT NULL,
+            num_doc TEXT,
+            observacao TEXT,
+            valor_total REAL NOT NULL,
+            data_emissao TEXT,
+            data_vencimento TEXT,
+            data_pagamento TEXT,
+            valor_pago REAL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT,
+            FOREIGN KEY (id_lote) REFERENCES lotes_movimentacao(id),
+            FOREIGN KEY (id_fornecedor) REFERENCES fornecedores(id),
+            FOREIGN KEY (id_plano_contas) REFERENCES planos_contas(id)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS compras_parcelas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_lote INTEGER NOT NULL,
+            parcela_num INTEGER NOT NULL,
+            valor REAL NOT NULL,
+            data_vencimento TEXT NOT NULL,
+            data_pagamento TEXT,
+            valor_pago REAL,
+            FOREIGN KEY (id_lote) REFERENCES lotes_movimentacao(id)
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_compras_parcelas_lote ON compras_parcelas(id_lote)')
     
     # 11. Tabela lotes_movimentacao_itens (Itens de cada lote)
     cursor.execute('''

@@ -20,6 +20,10 @@
             <button onclick="abrirModalQRCode()" class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg transition text-sm font-medium border border-slate-600">
                 <span class="text-lg">📱</span> Conectar Tablets
             </button>
+
+            <a href="{{ url_for('relatorios.relatorio_cmv') }}" class="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg transition text-sm font-medium border border-emerald-600">
+                <span class="text-lg">📉</span> Ver CMV
+            </a>
         </div>
     </div>
 
@@ -217,8 +221,22 @@
                     <span class="block text-xs text-gray-500">CRUD cadastral</span>
                 </div>
             </a>
+            <a href="{{ url_for('admin.admin_fornecedores') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-amber-500 transition flex items-center gap-3 group">
+                <span class="text-2xl group-hover:scale-110 transition">🏢</span>
+                <div class="text-left">
+                    <span class="block font-bold text-gray-200 text-sm">Fornecedores</span>
+                    <span class="block text-xs text-gray-500">Cadastro e consulta</span>
+                </div>
+            </a>
+            <a href="{{ url_for('admin.admin_planos_contas') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-amber-500 transition flex items-center gap-3 group">
+                <span class="text-2xl group-hover:scale-110 transition">🧾</span>
+                <div class="text-left">
+                    <span class="block font-bold text-gray-200 text-sm">Planos de Contas</span>
+                    <span class="block text-xs text-gray-500">Financeiro</span>
+                </div>
+            </a>
             {% if not MODO_LEITURA %}
-                {% if PERFIL_MAQUINA == 'LOJA' %}
+                {% if PERFIL_MAQUINA == LOJA %}
                     <a href="{{ url_for('admin.admin_categorias') }}" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg border border-slate-700/50 hover:border-amber-500 transition flex items-center gap-3 group">
                         <span class="text-2xl group-hover:scale-110 transition">📂</span>
                         <div class="text-left">

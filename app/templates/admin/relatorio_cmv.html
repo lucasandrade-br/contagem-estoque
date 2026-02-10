@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+  <div class="max-w-7xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-3xl font-bold text-white mb-2">📉 Relatório CMV</h1>
+        <p class="text-gray-400">Análise de custo das mercadorias vendidas</p>
+      </div>
+      <a href="{{ url_for('admin.dashboard') }}" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg transition">← Voltar</a>
+    </div>
+
+    <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-4 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-bold text-white">🔍 Filtros</h3>
+      </div>
+      <form class="grid grid-cols-1 md:grid-cols-5 gap-4" method="get">
+        <div>
+          <label class="block text-sm font-semibold text-gray-300 mb-2">Data início</label>
+          <input type="date" name="data_inicio" value="{{ data_inicio }}" class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-300 mb-2">Data fim</label>
+          <input type="date" name="data_fim" value="{{ data_fim }}" class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-300 mb-2">Categoria</label>
+          <select name="categoria_id" class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+            <option value="">Todas</option>
+            {% for c in categorias %}
+            <option value="{{ c.id }}" {% if categoria_id == c.id %}selected{% endif %}>{{ c.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-300 mb-2">Granularidade</label>
+          <select name="granularidade" class="w-full bg-slate-700 text-white border border-slate-600 rounded px-3 py-2">
+            <option value="semanal" {% if granularidade == 'semanal' %}selected{% endif %}>Semanal</option>
+            <option value="mensal" {% if granularidade == 'mensal' %}selected{% endif %}>Mensal</option>
+          </select>
+        </div>
+        <div class="flex items-end gap-2">
+          <button class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded transition" type="submit">Filtrar</button>
+          <a href="{{ url_for('relatorios.relatorio_cmv') }}" class="bg-slate-600 hover:bg-slate-500 text-white px-6 py-2 rounded transition">Limpar</a>
+        </div>
+      </form>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+      <div class="bg-gradient-to-br from-blue-500/10 to-blue-600/10 border border-blue-500/30 rounded-lg p-4">
+        <div class="text-blue-400 text-sm font-semibold mb-1">💰 ESTOQUE INICIAL</div>
+        <div class="text-3xl font-bold text-white">R$ {{ estoque_inicial|reais }}</div>
+      </div>
+      <div class="bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 border border-emerald-500/30 rounded-lg p-4">
+        <div class="text-emerald-400 text-sm font-semibold mb-1">📈 ENTRADAS (PERÍODO)</div>
+        <div class="text-3xl font-bold text-white">R$ {{ entradas|reais }}</div>
+      </div>
+      <div class="bg-gradient-to-br from-amber-500/10 to-amber-600/10 border border-amber-500/30 rounded-lg p-4">
+        <div class="text-amber-400 text-sm font-semibold mb-1">📦 ESTOQUE FINAL</div>
+        <div class="text-3xl font-bold text-white">R$ {{ estoque_final|reais }}</div>
+      </div>
+      <div class="bg-gradient-to-br from-purple-500/10 to-purple-600/10 border border-purple-500/30 rounded-lg p-4">
+        <div class="text-purple-300 text-sm font-semibold mb-1">🧾 SAÍDAS</div>
+        <div class="text-3xl font-bold text-white">R$ {{ cmv_movto|reais }}</div>
+      </div>
+      <div class="bg-gradient-to-br from-cyan-500/10 to-cyan-600/10 border border-cyan-500/30 rounded-lg p-4">
+        <div class="text-cyan-300 text-sm font-semibold mb-1">🧮 CMV</div>
+        <div class="text-3xl font-bold text-white">R$ {{ cmv_teorico|reais }}</div>
+      </div>
+      <div class="bg-gradient-to-br from-red-500/10 to-red-600/10 border border-red-500/30 rounded-lg p-4">
+        <div class="text-red-300 text-sm font-semibold mb-1">⚖️ DIFERENÇA (MOVTOS - TEÓRICO)</div>
+        <div class="text-3xl font-bold text-white">R$ {{ diferenca|reais }}</div>
+      </div>
+    </div>
+
+    <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-bold text-white">📅 Evolução (último snapshot do período)</h3>
+      </div>
+      <div class="bg-slate-900/60 border border-slate-700 rounded-lg p-4">
+        <canvas id="cmvChart" height="120"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function() {
+  const series = {{ series|tojson }};
+  const labels = series.map(s => s.data_ref);
+  const data = series.map(s => s.valor_total);
+
+  const ctx = document.getElementById('cmvChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Estoque (R$)',
+        data,
+        fill: false,
+        borderColor: '#38bdf8',
+        tension: 0.2,
+        pointRadius: 3,
+        pointBackgroundColor: '#38bdf8'
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#cbd5e1' } }
+      },
+      scales: {
+        x: { ticks: { color: '#cbd5e1' }, grid: { color: '#1f2937' } },
+        y: { beginAtZero: true, ticks: { color: '#cbd5e1' }, grid: { color: '#1f2937' } }
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

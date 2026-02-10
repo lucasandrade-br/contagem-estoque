@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('form-cabecalho').addEventListener('submit', iniciarLote);
     document.getElementById('busca-produto').addEventListener('input', debounce(buscarProduto, 300));
     document.getElementById('form-adicionar-item').addEventListener('submit', adicionarItem);
+    document.getElementById('form-editar-item').addEventListener('submit', salvarEdicaoItem);
 });
 
 async function carregarConfiguracoes() {
@@ -587,10 +588,16 @@ async function carregarItens() {
                 <td class="text-right">R$ ${precoCusto.toFixed(2)}</td>
                 <td class="text-right">R$ ${subtotal.toFixed(2)}</td>
                 <td class="text-right">
-                    <button onclick="removerItem(${item.id})" 
-                            class="text-red-400 hover:text-red-300">
-                        🗑️
-                    </button>
+                    <div class="flex justify-end gap-2">
+                        <button onclick="abrirModalEditarItem(${item.id})" 
+                                class="text-amber-400 hover:text-amber-300" title="Editar item">
+                            ✏️
+                        </button>
+                        <button onclick="removerItem(${item.id})" 
+                                class="text-red-400 hover:text-red-300" title="Remover item">
+                            🗑️
+                        </button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -626,6 +633,72 @@ async function removerItem(itemId) {
     }
 }
 
+// ========================================
+// EDITAR ITEM
+// ========================================
+
+function abrirModalEditarItem(itemId) {
+    const item = state.itens.find(i => i.id === itemId);
+    if (!item) {
+        alert('Item não encontrado');
+        return;
+    }
+    document.getElementById('editar-item-id').value = item.id;
+    document.getElementById('editar-produto-nome').textContent = item.produto_nome || '';
+    document.getElementById('editar-quantidade').value = item.quantidade_original != null ? item.quantidade_original : '';
+    document.getElementById('editar-preco').value = item.preco_custo_unitario != null ? item.preco_custo_unitario : '';
+    document.getElementById('modal-editar-item').classList.remove('hidden');
+}
+
+function fecharModalEditarItem() {
+    document.getElementById('modal-editar-item').classList.add('hidden');
+    document.getElementById('editar-item-id').value = '';
+    document.getElementById('editar-produto-nome').textContent = '';
+    document.getElementById('editar-quantidade').value = '';
+    document.getElementById('editar-preco').value = '';
+}
+
+async function salvarEdicaoItem(e) {
+    e.preventDefault();
+    const itemId = document.getElementById('editar-item-id').value;
+    const quantidade = parseFloat(document.getElementById('editar-quantidade').value);
+    const precoValor = document.getElementById('editar-preco').value;
+    const preco = precoValor === '' ? null : parseFloat(precoValor);
+    
+    if (!quantidade || quantidade <= 0) {
+        alert('Quantidade inválida');
+        return;
+    }
+    
+    const payload = { quantidade_original: quantidade };
+    if (!Number.isNaN(preco) && preco !== null) {
+        payload.preco_custo_unitario = preco;
+    }
+    
+    mostrarLoader();
+    
+    try {
+        const res = await fetch(`/lotes/${state.loteId}/item/${itemId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        
+        if (!res.ok) {
+            const error = await res.json();
+            throw new Error(error.erro || 'Erro ao atualizar item');
+        }
+        
+        await carregarItens();
+        fecharModalEditarItem();
+        
+    } catch (error) {
+        console.error('Erro ao editar item:', error);
+        alert(error.message);
+    } finally {
+        ocultarLoader();
+    }
+}
 // ========================================
 // FINALIZAR LOTE
 // ========================================

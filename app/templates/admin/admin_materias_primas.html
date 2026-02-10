@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-100">🧂 Matérias-primas</h1>
+            <p class="text-gray-400 mt-1">Cadastre e gerencie matérias-primas para vincular aos produtos.</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="{{ url_for('admin.dashboard') }}" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-bold transition flex items-center gap-2">
+                ← Voltar ao Dashboard
+            </a>
+            <button onclick="abrirModalMateriaPrima()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-bold transition shadow-lg">
+                <span class="text-xl mr-2">➕</span> Nova Matéria-prima
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-6 flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+        <div class="text-gray-300 text-sm">
+            <strong>Importação/Exportação:</strong> use o modelo para preparar o Excel, importe para atualizar ou criar, e exporte a lista atual.
+        </div>
+        <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+            <a href="{{ url_for('admin.modelo_materias_primas') }}" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-bold transition text-center">⬇️ Baixar modelo</a>
+            <a href="{{ url_for('admin.exportar_materias_primas') }}" class="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold transition text-center">📤 Exportar Excel</a>
+            <form method="POST" action="{{ url_for('admin.importar_materias_primas') }}" enctype="multipart/form-data" class="flex gap-2 items-center">
+                <input type="file" name="arquivo" accept=".xlsx,.xls" required class="text-sm text-gray-200">
+                <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold transition">📥 Importar</button>
+            </form>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-4 p-4 rounded-lg {% if category == 'error' %}bg-red-900/20 border border-red-500 text-red-200{% elif category == 'warning' %}bg-amber-900/20 border border-amber-500 text-amber-200{% else %}bg-emerald-900/20 border border-emerald-500 text-emerald-200{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="p-6 bg-slate-900/50 border-b border-slate-700">
+            <p class="text-gray-400 text-sm">
+                <span class="text-amber-400">💡</span>
+                Uma matéria-prima pode estar vinculada a vários produtos. Para remover uma matéria-prima, primeiro remova ou altere os vínculos dos produtos.
+            </p>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-slate-900/50">
+                    <tr>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Nome</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Código Interno</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Descrição</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Produtos Vinculados</th>
+                        <th class="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700">
+                    {% for mp in materias_primas %}
+                    <tr class="hover:bg-slate-700/30 transition">
+                        <td class="px-6 py-4 text-white font-bold">{{ mp.nome }}</td>
+                        <td class="px-6 py-4 text-gray-300 font-mono text-sm">{{ mp.codigo_interno or '-' }}</td>
+                        <td class="px-6 py-4 text-gray-400 text-sm">{{ mp.descricao or '-' }}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-3 py-1 bg-amber-500/20 rounded-full text-sm font-bold text-amber-300">{{ mp.total_produtos }}</span>
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <a href="{{ url_for('admin.materia_prima_produtos', materia_id=mp.id) }}" 
+                                   class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-bold transition"
+                                   title="Gerenciar Produtos">
+                                    📦 Produtos
+                                </a>
+                                <button onclick="editarMateriaPrima({{ mp.id }}, '{{ mp.nome|replace("'", "&#39;") }}', '{{ (mp.codigo_interno or '')|replace("'", "&#39;") }}', '{{ (mp.descricao or '')|replace("'", "&#39;") }}')"
+                                        class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm transition"
+                                        title="Editar">
+                                    ✏️
+                                </button>
+
+                                <button onclick="excluirMateriaPrima({{ mp.id }}, '{{ mp.nome|replace("'", "&#39;") }}', {{ mp.total_produtos }})"
+                                        class="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white px-3 py-2 rounded-lg text-sm transition"
+                                        title="Excluir">
+                                    🗑️
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                            <div class="text-4xl mb-2">🧂</div>
+                            Nenhuma matéria-prima cadastrada
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Criar/Editar Matéria-prima -->
+<div id="modalMateriaPrima" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-slate-800 rounded-2xl p-8 max-w-lg w-full shadow-2xl transform transition-all scale-100 border border-slate-700">
+        <h3 class="text-2xl font-bold text-white mb-6" id="modalMateriaTitulo">Nova Matéria-prima</h3>
+        
+        <form method="POST" action="{{ url_for('admin.admin_materias_primas') }}">
+            <input type="hidden" name="action" value="save">
+            <input type="hidden" name="materia_prima_id" id="materiaId">
+            
+            <div class="mb-4">
+                <label for="nome" class="block text-sm font-bold text-gray-300 mb-2">Nome *</label>
+                <input type="text" class="w-full p-3 bg-slate-700 text-gray-100 border-2 border-slate-600 rounded-lg focus:border-emerald-500 focus:outline-none placeholder-gray-400" 
+                       id="nome" name="nome" required placeholder="Ex: Açúcar, Farinha de Trigo">
+            </div>
+
+            <div class="mb-4">
+                <label for="codigo_interno" class="block text-sm font-bold text-gray-300 mb-2">Código Interno</label>
+                <input type="text" class="w-full p-3 bg-slate-700 text-gray-100 border-2 border-slate-600 rounded-lg focus:border-emerald-500 focus:outline-none placeholder-gray-400" 
+                       id="codigo_interno" name="codigo_interno" placeholder="Ex: MP-001">
+                <small class="text-gray-400 text-xs">Usado para importações e referência.</small>
+            </div>
+            
+            <div class="mb-6">
+                <label for="descricao" class="block text-sm font-bold text-gray-300 mb-2">Descrição</label>
+                <textarea class="w-full p-3 bg-slate-700 text-gray-100 border-2 border-slate-600 rounded-lg focus:border-emerald-500 focus:outline-none placeholder-gray-400" 
+                          id="descricao" name="descricao" rows="3"
+                          placeholder="Detalhes adicionais (opcional)"></textarea>
+            </div>
+            
+            <div class="flex gap-3">
+                <button type="button" onclick="fecharModalMateriaPrima()" 
+                        class="flex-1 bg-slate-700 text-white font-bold py-3 rounded-xl hover:bg-slate-600 transition">
+                    Cancelar
+                </button>
+                <button type="submit" 
+                        class="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition shadow-lg">
+                    Salvar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Form oculto para exclusão -->
+<form id="formExcluirMateria" method="POST" action="{{ url_for('admin.admin_materias_primas') }}" style="display: none;">
+    <input type="hidden" name="action" value="delete">
+    <input type="hidden" name="materia_prima_id" id="excluirMateriaId">
+</form>
+
+<script>
+function abrirModalMateriaPrima() {
+    document.getElementById('modalMateriaPrima').classList.remove('hidden');
+}
+
+function fecharModalMateriaPrima() {
+    document.getElementById('modalMateriaPrima').classList.add('hidden');
+    document.getElementById('modalMateriaTitulo').textContent = 'Nova Matéria-prima';
+    document.getElementById('materiaId').value = '';
+    document.getElementById('nome').value = '';
+    document.getElementById('codigo_interno').value = '';
+    document.getElementById('descricao').value = '';
+}
+
+function editarMateriaPrima(id, nome, codigo, descricao) {
+    document.getElementById('modalMateriaTitulo').textContent = 'Editar Matéria-prima';
+    document.getElementById('materiaId').value = id;
+    document.getElementById('nome').value = nome;
+    document.getElementById('codigo_interno').value = codigo;
+    document.getElementById('descricao').value = descricao;
+    abrirModalMateriaPrima();
+}
+
+function excluirMateriaPrima(id, nome, totalProdutos) {
+    if (totalProdutos > 0) {
+        alert(`Não é possível desativar "${nome}": existem ${totalProdutos} produto(s) vinculados.`);
+        return;
+    }
+    if (confirm(`Deseja realmente desativar a matéria-prima "${nome}"?`)) {
+        document.getElementById('excluirMateriaId').value = id;
+        document.getElementById('formExcluirMateria').submit();
+    }
+}
+</script>
+{% endblock %}

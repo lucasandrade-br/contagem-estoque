@@ -26,6 +26,8 @@ function abrirModalProduto() {
     document.getElementById('prod_gtin').value = '';
     document.getElementById('prod_categoria').value = '';
     document.getElementById('prod_unidade_padrao').value = '';
+    const elMateria = document.getElementById('prod_materia_prima_id');
+    if (elMateria) elMateria.value = '';
     
     const checkboxes = document.querySelectorAll('input[name="unidades_permitidas"]');
     checkboxes.forEach(cb => {
@@ -62,6 +64,9 @@ function editarProduto(id) {
 
             const elCategoria = document.getElementById('prod_categoria');
             if (elCategoria) elCategoria.value = data.categoria || '';
+
+            const elMateria = document.getElementById('prod_materia_prima_id');
+            if (elMateria) elMateria.value = data.materia_prima_id || '';
 
             // SEUS NOVOS CAMPOS
             const elCusto = document.getElementById('prod_preco_custo');

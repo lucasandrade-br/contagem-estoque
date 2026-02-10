@@ -6,7 +6,7 @@
 <div class="max-w-6xl mx-auto px-4 py-6">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-        <h1 class="text-3xl font-bold text-amber-500">Lote #{{ lote.id }}</h1>
+        <h1 class="text-3xl font-bold text-amber-500">Movimentação #{{ lote.id }}</h1>
         <a href="{{ url_for('admin.lotes_pendentes') }}" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
             ← Voltar
         </a>
@@ -103,16 +103,132 @@
         </div>
     </div>
     
+    {% if lote.tipo == 'ENTRADA' %}
+    <!-- Dados Financeiros -->
+    <div id="secao-financeiro" class="bg-slate-800 rounded-lg p-6 mb-6 border border-slate-700">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+                <h2 class="text-xl font-bold text-gray-100">Dados financeiros</h2>
+                <span class="text-xs text-amber-400">Apenas ENTRADA</span>
+                {% if lote.exportado_financeiro %}
+                <span class="px-2 py-1 text-xs rounded bg-emerald-900 text-emerald-300 border border-emerald-500">Exportado</span>
+                {% endif %}
+            </div>
+            
+        </div>
+
+        <form id="form-financeiro" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-gray-300 mb-2 font-semibold">Fornecedor <span class="text-red-500">*</span></label>
+                    <input id="financeiro-fornecedor-busca" type="text" placeholder="Digite para filtrar" class="w-full p-2 mb-2 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm">
+                    <select id="financeiro-fornecedor" required class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <option value="">Carregando...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-gray-300 mb-2 font-semibold">Plano de contas <span class="text-red-500">*</span></label>
+                    <input id="financeiro-plano-busca" type="text" placeholder="Digite para filtrar" class="w-full p-2 mb-2 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm">
+                    <select id="financeiro-plano" required class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <option value="">Carregando...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-gray-300 mb-2 font-semibold">Nº documento</label>
+                    <input id="financeiro-num-doc" type="text" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="NF, pedido...">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-gray-300 mb-2 font-semibold">Valor total</label>
+                    <input id="financeiro-valor-total" type="number" step="0.01" min="0" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <p class="text-xs text-gray-400 mt-1">Soma dos itens, editável.</p>
+                </div>
+                <div>
+                    <label class="block text-gray-300 mb-2 font-semibold">Data emissão</label>
+                    <input id="financeiro-emissao" type="date" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div class="flex items-end gap-2">
+                    <div class="flex items-center gap-2">
+                        <input id="financeiro-pago" type="checkbox" class="w-4 h-4 text-emerald-500">
+                        <label for="financeiro-pago" class="text-gray-200 font-semibold">Pagamento efetuado?</label>
+                    </div>
+                </div>
+                <div class="pagamento-field hidden">
+                    <label class="block text-gray-300 mb-2 font-semibold">Valor pago</label>
+                    <input id="financeiro-valor-pago" type="number" step="0.01" min="0" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" disabled>
+                </div>
+                <div class="pagamento-field hidden">
+                    <label class="block text-gray-300 mb-2 font-semibold">Data pagamento</label>
+                    <input id="financeiro-data-pago" type="date" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" disabled>
+                </div>
+            </div>
+
+            <div class="flex flex-col md:flex-row md:items-end gap-3">
+                <div class="md:w-40">
+                    <label class="block text-gray-300 mb-2 font-semibold">Nº parcelas</label>
+                    <input id="financeiro-qtd-parcelas" type="number" min="1" value="1" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-gray-300 mb-2 font-semibold">Vencimento base</label>
+                    <input id="financeiro-venc-base" type="date" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                <div class="md:w-48">
+                    <button type="button" id="btn-gerar-parcelas" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-lg transition">
+                        Gerar parcelas
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto border border-slate-700 rounded-lg">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-700 text-gray-400">
+                            <th class="text-left py-2 px-3">Parcela</th>
+                            <th class="text-left py-2 px-3">Vencimento</th>
+                            <th class="text-left py-2 px-3">Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="parcelas-body" class="text-gray-200"></tbody>
+                    <tfoot>
+                        <tr class="border-t border-slate-700 font-bold text-amber-400">
+                            <td colspan="2" class="py-2 px-3 text-right">Soma das parcelas:</td>
+                            <td class="py-2 px-3" id="parcelas-soma">R$ 0,00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div>
+                <label class="block text-gray-300 mb-2 font-semibold">Observação</label>
+                <textarea id="financeiro-observacao" rows="3" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Anotações internas"></textarea>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-3">
+                <button type="submit" id="btn-salvar-financeiro" class="w-full md:w-56 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition">
+                    Salvar dados financeiros
+                </button>
+                <p id="financeiro-aviso-leitura" class="text-sm text-gray-300 md:flex-1 md:self-center hidden"></p>
+            </div>
+            <p id="financeiro-status" class="text-sm text-gray-300"></p>
+        </form>
+    </div>
+    {% endif %}
+
     <!-- Ações -->
     {% if lote.status == 'PENDENTE_APROVACAO' %}
     <div class="flex gap-4">
         <button onclick="aprovarLote()" 
                 class="flex-1 px-6 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition text-lg">
-            ✅ APROVAR LOTE
+            ✅ APROVAR MOVIMENTAÇÃO
         </button>
         <button onclick="abrirModalRejeitar()" 
                 class="flex-1 px-6 py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition text-lg">
-            ❌ REJEITAR LOTE
+            ❌ REJEITAR MOVIMENTAÇÃO
         </button>
     </div>
     {% endif %}
@@ -238,9 +354,28 @@
 const LOTE_ID = {{ lote.id }};
 let produtosCache = [];
 let unidadesCache = {};
+const FINANCE_PREFILL = {{ financeiro|tojson or 'null' }};
+const FINANCE_PARCELAS = {{ parcelas_fin|tojson or '[]' }};
+const CAN_EDIT_FIN = {{ 'true' if lote.status in ['PENDENTE_APROVACAO','FINALIZADO','RASCUNHO'] else 'false' }};
+const VALOR_ITENS_TOTAL = {{ valor_itens_total or 0 }};
+let FORNECEDORES_CACHE = [];
+let PLANOS_CACHE = [];
+let FINANCEIRO_SALVO = Boolean(FINANCE_PREFILL);
+
+function normalize(str) {
+    return (str || '').toLowerCase();
+}
 
 function aprovarLote() {
     if (!confirm('Aprovar este lote? As movimentações serão aplicadas ao estoque.')) return;
+
+    if ({{ 'true' if lote.tipo == 'ENTRADA' else 'false' }}) {
+        const erros = validarFinanceiroPreAprovacao();
+        if (erros.length > 0) {
+            alert('Corrija os dados financeiros antes de aprovar:\n- ' + erros.join('\n- '));
+            return;
+        }
+    }
     
     fetch('/lotes/{{ lote.id }}/aprovar', {
         method: 'POST',
@@ -534,8 +669,286 @@ function adicionarNovoItem() {
     })
     .catch(err => alert('❌ Erro: ' + err.message));
 }
+
 </script>
 
+<script>
+// -------------------------
+// Dados Financeiros
+// -------------------------
+document.addEventListener('DOMContentLoaded', () => {
+    if ({{ 'true' if lote.tipo == 'ENTRADA' else 'false' }}) {
+        initFinanceiro();
+    }
+});
 
+function initFinanceiro() {
+    const status = document.getElementById('financeiro-status');
+    const aviso = document.getElementById('financeiro-aviso-leitura');
+    const btnSalvar = document.getElementById('btn-salvar-financeiro');
+    const btnGerar = document.getElementById('btn-gerar-parcelas');
+
+    carregarCatalogosFinanceiros().then(() => {
+        preencherFinanceiroInicial();
+        if (!CAN_EDIT_FIN) {
+            desabilitarFinanceiro();
+            aviso.classList.remove('hidden');
+            aviso.textContent = 'Edição bloqueada para status atual do lote.';
+            if (btnSalvar) btnSalvar.classList.add('hidden');
+            if (btnGerar) btnGerar.disabled = true;
+        }
+    });
+
+    document.getElementById('financeiro-pago').addEventListener('change', togglePagamentoCampos);
+    document.getElementById('financeiro-fornecedor-busca').addEventListener('input', filtrarFornecedores);
+    document.getElementById('financeiro-plano-busca').addEventListener('input', filtrarPlanos);
+    btnGerar.addEventListener('click', gerarParcelasAuto);
+    document.getElementById('form-financeiro').addEventListener('submit', salvarFinanceiro);
+
+    status.textContent = FINANCE_PREFILL ? 'Dados financeiros já salvos.' : 'Preencha e salve os dados financeiros.';
+}
+
+async function carregarCatalogosFinanceiros() {
+    const [forResp, planoResp] = await Promise.all([
+        fetch('/api/fornecedores?ativos=1'),
+        fetch('/api/planos_contas?ativos=1')
+    ]);
+    FORNECEDORES_CACHE = await forResp.json();
+    PLANOS_CACHE = await planoResp.json();
+
+    popularSelect('financeiro-fornecedor', FORNECEDORES_CACHE, 'id', 'nome');
+    popularSelect('financeiro-plano', PLANOS_CACHE, 'id', 'descricao');
+}
+
+function popularSelect(id, dados, valueKey, labelKey) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">Selecione...</option>';
+    dados.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item[valueKey];
+        opt.textContent = item[labelKey];
+        sel.appendChild(opt);
+    });
+}
+
+function preencherFinanceiroInicial() {
+    const valorTotalInput = document.getElementById('financeiro-valor-total');
+    const emissaoInput = document.getElementById('financeiro-emissao');
+    const numDocInput = document.getElementById('financeiro-num-doc');
+    const fornecedorSel = document.getElementById('financeiro-fornecedor');
+    const planoSel = document.getElementById('financeiro-plano');
+    const obs = document.getElementById('financeiro-observacao');
+
+    const pagoChk = document.getElementById('financeiro-pago');
+    const valorPago = document.getElementById('financeiro-valor-pago');
+    const dataPago = document.getElementById('financeiro-data-pago');
+
+    if (FINANCE_PREFILL) {
+        fornecedorSel.value = FINANCE_PREFILL.id_fornecedor;
+        planoSel.value = FINANCE_PREFILL.id_plano_contas;
+        numDocInput.value = FINANCE_PREFILL.num_doc || '';
+        valorTotalInput.value = FINANCE_PREFILL.valor_total || '';
+        emissaoInput.value = (FINANCE_PREFILL.data_emissao || '').split('T')[0] || '';
+        obs.value = FINANCE_PREFILL.observacao || '';
+
+        if (FINANCE_PREFILL.data_pagamento || FINANCE_PREFILL.valor_pago) {
+            pagoChk.checked = true;
+            valorPago.value = FINANCE_PREFILL.valor_pago || '';
+            dataPago.value = (FINANCE_PREFILL.data_pagamento || '').split('T')[0] || '';
+        }
+        togglePagamentoCampos();
+        renderParcelas(FINANCE_PARCELAS);
+    } else {
+        valorTotalInput.value = VALOR_ITENS_TOTAL || '';
+        emissaoInput.value = new Date().toISOString().split('T')[0];
+        renderParcelas([{ parcela_num: 1, valor: VALOR_ITENS_TOTAL || 0, data_vencimento: '' }]);
+    }
+    atualizarSomaParcelas();
+}
+
+function renderParcelas(parcelas) {
+    const tbody = document.getElementById('parcelas-body');
+    tbody.innerHTML = '';
+    parcelas.forEach(parc => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-slate-700';
+        tr.innerHTML = `
+            <td class="py-2 px-3">${parc.parcela_num}</td>
+            <td class="py-2 px-3"><input type="date" class="bg-slate-700 rounded p-2 w-full" value="${parc.data_vencimento || ''}"></td>
+            <td class="py-2 px-3"><input type="number" step="0.01" min="0" class="bg-slate-700 rounded p-2 w-full text-right" value="${Number(parc.valor || 0).toFixed(2)}"></td>
+        `;
+        tbody.appendChild(tr);
+    });
+    atualizarSomaParcelas();
+}
+
+function gerarParcelasAuto() {
+    const qtd = parseInt(document.getElementById('financeiro-qtd-parcelas').value || '1', 10);
+    const vencBase = document.getElementById('financeiro-venc-base').value;
+    const total = parseFloat(document.getElementById('financeiro-valor-total').value || '0');
+    if (!qtd || qtd < 1) return alert('Informe nº parcelas válido');
+    if (!vencBase) return alert('Informe o vencimento base');
+    if (!total || total <= 0) return alert('Informe o valor total');
+
+    const valorParcela = Math.round((total / qtd) * 100) / 100;
+    const parcelas = [];
+    let acumulado = 0;
+    for (let i = 1; i <= qtd; i++) {
+        let valor = valorParcela;
+        acumulado += valorParcela;
+        if (i === qtd) {
+            valor = Math.round((total - (acumulado - valorParcela)) * 100) / 100;
+        }
+        const data = new Date(vencBase);
+        data.setMonth(data.getMonth() + (i - 1));
+        const dataStr = data.toISOString().substring(0, 10);
+        parcelas.push({ parcela_num: i, valor, data_vencimento: dataStr });
+    }
+    renderParcelas(parcelas);
+}
+
+function atualizarSomaParcelas() {
+    const tbody = document.getElementById('parcelas-body');
+    const valores = Array.from(tbody.querySelectorAll('input[type="number"]')).map(i => parseFloat(i.value || '0'));
+    const soma = valores.reduce((acc, v) => acc + v, 0);
+    document.getElementById('parcelas-soma').textContent = `R$ ${soma.toFixed(2)}`;
+}
+
+function togglePagamentoCampos() {
+    const chk = document.getElementById('financeiro-pago');
+    const valor = document.getElementById('financeiro-valor-pago');
+    const data = document.getElementById('financeiro-data-pago');
+    const wrappers = document.querySelectorAll('.pagamento-field');
+    const enabled = chk.checked;
+    valor.disabled = !enabled;
+    data.disabled = !enabled;
+    wrappers.forEach(w => w.classList.toggle('hidden', !enabled));
+    if (!enabled) {
+        valor.value = '';
+        data.value = '';
+    }
+}
+
+function coletarParcelas() {
+    const rows = Array.from(document.querySelectorAll('#parcelas-body tr'));
+    return rows.map((tr, idx) => {
+        const inputs = tr.querySelectorAll('input');
+        return {
+            parcela_num: idx + 1,
+            data_vencimento: inputs[0].value || null,
+            valor: parseFloat(inputs[1].value || '0')
+        };
+    });
+}
+
+function getSomaParcelas() {
+    const parcelas = coletarParcelas();
+    return parcelas.reduce((acc, p) => acc + (p.valor || 0), 0);
+}
+
+function valoresIguais(a, b) {
+    return Math.abs((a || 0) - (b || 0)) < 0.01;
+}
+
+function filtrarFornecedores() {
+    const termo = normalize(document.getElementById('financeiro-fornecedor-busca').value);
+    const filtrados = FORNECEDORES_CACHE.filter(f => normalize(f.nome).includes(termo));
+    popularSelect('financeiro-fornecedor', filtrados, 'id', 'nome');
+    if (FINANCE_PREFILL && filtrados.some(f => f.id === FINANCE_PREFILL.id_fornecedor)) {
+        document.getElementById('financeiro-fornecedor').value = FINANCE_PREFILL.id_fornecedor;
+    }
+}
+
+function filtrarPlanos() {
+    const termo = normalize(document.getElementById('financeiro-plano-busca').value);
+    const filtrados = PLANOS_CACHE.filter(p => normalize(p.descricao || '').includes(termo) || normalize(p.codigo || '').includes(termo));
+    popularSelect('financeiro-plano', filtrados, 'id', 'descricao');
+    if (FINANCE_PREFILL && filtrados.some(p => p.id === FINANCE_PREFILL.id_plano_contas)) {
+        document.getElementById('financeiro-plano').value = FINANCE_PREFILL.id_plano_contas;
+    }
+}
+
+async function salvarFinanceiro(event) {
+    event.preventDefault();
+    if (!CAN_EDIT_FIN) return;
+
+    const payload = {
+        id_fornecedor: parseInt(document.getElementById('financeiro-fornecedor').value, 10),
+        id_plano_contas: parseInt(document.getElementById('financeiro-plano').value, 10),
+        num_doc: document.getElementById('financeiro-num-doc').value.trim(),
+        observacao: document.getElementById('financeiro-observacao').value.trim(),
+        valor_total: parseFloat(document.getElementById('financeiro-valor-total').value || '0'),
+        data_emissao: document.getElementById('financeiro-emissao').value || null,
+        parcelas: coletarParcelas()
+    };
+
+    const pago = document.getElementById('financeiro-pago').checked;
+    if (pago) {
+        payload.pagamento = {
+            data_pagamento: document.getElementById('financeiro-data-pago').value,
+            valor_pago: parseFloat(document.getElementById('financeiro-valor-pago').value || '0')
+        };
+    }
+
+    const res = await fetch(`/lotes/${LOTE_ID}/financeiro`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.sucesso) {
+        alert('Erro ao salvar: ' + (data.erro || res.statusText));
+        return;
+    }
+    FINANCEIRO_SALVO = true;
+    document.getElementById('financeiro-status').textContent = 'Dados financeiros salvos com sucesso.';
+}
+
+function validarFinanceiroPreAprovacao() {
+    const erros = [];
+    const fornecedor = document.getElementById('financeiro-fornecedor').value;
+    const plano = document.getElementById('financeiro-plano').value;
+    const valorTotalFin = parseFloat(document.getElementById('financeiro-valor-total').value || '0');
+    const emissao = document.getElementById('financeiro-emissao').value;
+    const pagoChk = document.getElementById('financeiro-pago');
+    const valorPago = parseFloat(document.getElementById('financeiro-valor-pago').value || '0');
+    const dataPago = document.getElementById('financeiro-data-pago').value;
+
+    if (!fornecedor) erros.push('Selecione um fornecedor.');
+    if (!plano) erros.push('Selecione um plano de contas.');
+    if (!valorTotalFin || valorTotalFin <= 0) erros.push('Informe o valor total.');
+    if (!emissao) erros.push('Informe a data de emissão.');
+
+    const parcelas = coletarParcelas();
+    if (!parcelas.length) erros.push('Gere pelo menos uma parcela.');
+    parcelas.forEach((p, idx) => {
+        if (!p.data_vencimento) erros.push(`Informe o vencimento da parcela ${idx + 1}.`);
+        if (!p.valor || p.valor <= 0) erros.push(`Informe o valor da parcela ${idx + 1}.`);
+    });
+
+    if (pagoChk && pagoChk.checked) {
+        if (!valorPago || valorPago <= 0) erros.push('Informe o valor pago.');
+        if (!dataPago) erros.push('Informe a data de pagamento.');
+    }
+
+    const valorItens = parseFloat(VALOR_ITENS_TOTAL || 0);
+    const somaParcelas = getSomaParcelas();
+    if (!valoresIguais(valorItens, valorTotalFin) || !valoresIguais(valorItens, somaParcelas)) {
+        erros.push('Os valores devem ser iguais: total dos itens, total financeiro e soma das parcelas.');
+    }
+
+    if (!FINANCEIRO_SALVO) {
+        erros.push('Clique em "Salvar dados financeiros" antes de aprovar.');
+    }
+
+    return erros;
+}
+
+function desabilitarFinanceiro() {
+    document.querySelectorAll('#secao-financeiro input, #secao-financeiro select, #secao-financeiro button').forEach(el => {
+        if (el.id === 'btn-salvar-financeiro') return;
+        el.disabled = true;
+    });
+}
 </script>
 {% endblock %}

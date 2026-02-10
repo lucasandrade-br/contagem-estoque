@@ -7,6 +7,33 @@ from ..db import get_db
 bp = Blueprint('api', __name__, url_prefix='/api')
 
 
+def _ensure_finance_schema(db):
+    # Reutiliza lógica mínima para garantir tabelas catálogos.
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS fornecedores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            cnpj TEXT,
+            ie TEXT,
+            contato TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT
+        )
+    ''')
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS planos_contas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT,
+            descricao TEXT NOT NULL,
+            tipo TEXT,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT
+        )
+    ''')
+
+
 @bp.route('/detalhes_local/<int:local_id>')
 def api_detalhes_local(local_id):
     if not session.get('is_gerente'):
@@ -29,6 +56,35 @@ def api_detalhes_local(local_id):
     rows = db.execute(sql, (local_id, inv['id'])).fetchall()
     itens = [{'produto': r['produto'], 'quantidade': r['quantidade'], 'unidade': r['unidade'], 'usuario': r['usuario'], 'data_hora': r['data_hora']} for r in rows]
     return jsonify(itens)
+
+
+# ----------------------------
+# Catálogos financeiros
+# ----------------------------
+
+
+@bp.route('/fornecedores')
+def api_listar_fornecedores():
+    db = get_db()
+    _ensure_finance_schema(db)
+    ativos = request.args.get('ativos')
+    if ativos is not None:
+        rows = db.execute('SELECT id, nome, cnpj, ativo FROM fornecedores WHERE ativo = 1 ORDER BY nome').fetchall()
+    else:
+        rows = db.execute('SELECT id, nome, cnpj, ativo FROM fornecedores ORDER BY nome').fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@bp.route('/planos_contas')
+def api_listar_planos_contas():
+    db = get_db()
+    _ensure_finance_schema(db)
+    ativos = request.args.get('ativos')
+    if ativos is not None:
+        rows = db.execute('SELECT id, codigo, descricao, ativo FROM planos_contas WHERE ativo = 1 ORDER BY descricao').fetchall()
+    else:
+        rows = db.execute('SELECT id, codigo, descricao, ativo FROM planos_contas ORDER BY descricao').fetchall()
+    return jsonify([dict(r) for r in rows])
 
 
 @bp.route('/atualizar_produto_rapido', methods=['POST'])
