@@ -7,7 +7,7 @@ from flask import Blueprint, request, jsonify, session
 from ..db import get_db
 from ..utils import (
     obter_nivel_controle, validar_localizacao, obter_saldo, 
-    ajustar_saldo, obter_requer_aprovacao
+    ajustar_saldo, obter_requer_aprovacao, obter_custo_medio
 )
 
 bp = Blueprint('lotes', __name__, url_prefix='/lotes')
@@ -528,11 +528,12 @@ def finalizar_lote(id_lote):
         # Gerar movimentações e ajustar saldos imediatamente
         for item in itens:
             qtd_convertida = item['quantidade_original'] * item['fator_conversao']
-            preco_custo_unitario = item['preco_custo_unitario'] or item['preco_custo'] or 0.0
-            
+
             if tipo == 'TRANSFERENCIA':
-                # Gerar 2 movimentações: SAIDA origem + ENTRADA destino
-                # SAIDA
+                custo_origem = obter_custo_medio(db, item['id_produto'], lote['setor_origem_id'], lote['local_origem_id'])
+                custo_unit = custo_origem
+
+                # SAIDA origem
                 db.execute('''
                     INSERT INTO movimentacoes (
                         id_produto, tipo, motivo, quantidade,
@@ -543,12 +544,12 @@ def finalizar_lote(id_lote):
                 ''', (
                     item['id_produto'], lote['motivo'], qtd_convertida,
                     item['unidade_movimentacao'], item['fator_conversao'], item['quantidade_original'],
-                    preco_custo_unitario, -qtd_convertida * preco_custo_unitario,
-                    datetime.now().isoformat(), f"Transferência Lote #{id_lote}", 
+                    custo_unit, -qtd_convertida * custo_unit,
+                    datetime.now().isoformat(), f"Transferência Lote #{id_lote}",
                     session.get('user_id'), f"Lote #{id_lote}"
                 ))
-                
-                # ENTRADA
+
+                # ENTRADA destino (mantém custo da origem)
                 db.execute('''
                     INSERT INTO movimentacoes (
                         id_produto, tipo, motivo, quantidade,
@@ -559,24 +560,25 @@ def finalizar_lote(id_lote):
                 ''', (
                     item['id_produto'], lote['motivo'], qtd_convertida,
                     item['unidade_movimentacao'], item['fator_conversao'], item['quantidade_original'],
-                    preco_custo_unitario, qtd_convertida * preco_custo_unitario,
-                    datetime.now().isoformat(), f"Transferência Lote #{id_lote}", 
+                    custo_unit, qtd_convertida * custo_unit,
+                    datetime.now().isoformat(), f"Transferência Lote #{id_lote}",
                     session.get('user_id'), f"Lote #{id_lote}"
                 ))
-                
-                # Ajustar saldos
+
                 if item['controla_estoque']:
                     ajustar_saldo(db, item['id_produto'], qtd_convertida, 'SAIDA',
                                  lote['setor_origem_id'], lote['local_origem_id'])
                     ajustar_saldo(db, item['id_produto'], qtd_convertida, 'ENTRADA',
-                                 lote['setor_destino_id'], lote['local_destino_id'])
-            
+                                 lote['setor_destino_id'], lote['local_destino_id'], custo_unitario=custo_unit)
+
             else:
-                # ENTRADA ou SAIDA normal
-                valor_total = qtd_convertida * preco_custo_unitario
                 if tipo == 'SAIDA':
-                    valor_total = -valor_total
-                
+                    preco_custo_unitario = obter_custo_medio(db, item['id_produto'], lote['setor_origem_id'], lote['local_origem_id'])
+                    valor_total = -qtd_convertida * preco_custo_unitario
+                else:
+                    preco_custo_unitario = item['preco_custo_unitario'] or item['preco_custo'] or 0.0
+                    valor_total = qtd_convertida * preco_custo_unitario
+
                 db.execute('''
                     INSERT INTO movimentacoes (
                         id_produto, tipo, motivo, quantidade,
@@ -592,15 +594,14 @@ def finalizar_lote(id_lote):
                     preco_custo_unitario, valor_total,
                     lote['setor_origem_id'], lote['local_origem_id'],
                     lote['setor_destino_id'], lote['local_destino_id'],
-                    datetime.now().isoformat(), lote['origem'] or f"Lote #{id_lote}", 
+                    datetime.now().isoformat(), lote['origem'] or f"Lote #{id_lote}",
                     session.get('user_id'), f"Lote #{id_lote}"
                 ))
-                
-                # Ajustar saldo
+
                 if item['controla_estoque']:
                     if tipo == 'ENTRADA':
                         ajustar_saldo(db, item['id_produto'], qtd_convertida, tipo,
-                                     lote['setor_destino_id'], lote['local_destino_id'])
+                                     lote['setor_destino_id'], lote['local_destino_id'], custo_unitario=preco_custo_unitario)
                     else:  # SAIDA
                         ajustar_saldo(db, item['id_produto'], qtd_convertida, tipo,
                                      lote['setor_origem_id'], lote['local_origem_id'])
@@ -817,9 +818,11 @@ def aprovar_lote(id_lote):
         # Aplicar movimentações e ajustar saldos (mesmo código do finalizar direto)
         for item in itens:
             qtd_convertida = item['quantidade_original'] * item['fator_conversao']
-            preco_custo_unitario = item['preco_custo_unitario'] or item['preco_custo'] or 0.0
-            
+
             if tipo == 'TRANSFERENCIA':
+                custo_origem = obter_custo_medio(db, item['id_produto'], lote['setor_origem_id'], lote['local_origem_id'])
+                custo_unit = custo_origem
+
                 # SAIDA origem
                 db.execute('''
                     INSERT INTO movimentacoes (
@@ -832,7 +835,7 @@ def aprovar_lote(id_lote):
                 ''', (
                     item['id_produto'], lote['motivo'], qtd_convertida,
                     item['unidade_movimentacao'], item['fator_conversao'], item['quantidade_original'],
-                    preco_custo_unitario, -qtd_convertida * preco_custo_unitario,
+                    custo_unit, -qtd_convertida * custo_unit,
                     lote['setor_origem_id'], lote['local_origem_id'],
                     datetime.now().isoformat(), f"Transferência Lote #{id_lote}", 
                     session.get('user_id'), f"Lote #{id_lote}"
@@ -850,7 +853,7 @@ def aprovar_lote(id_lote):
                 ''', (
                     item['id_produto'], lote['motivo'], qtd_convertida,
                     item['unidade_movimentacao'], item['fator_conversao'], item['quantidade_original'],
-                    preco_custo_unitario, qtd_convertida * preco_custo_unitario,
+                    custo_unit, qtd_convertida * custo_unit,
                     lote['setor_destino_id'], lote['local_destino_id'],
                     datetime.now().isoformat(), f"Transferência Lote #{id_lote}", 
                     session.get('user_id'), f"Lote #{id_lote}"
@@ -861,13 +864,15 @@ def aprovar_lote(id_lote):
                     ajustar_saldo(db, item['id_produto'], qtd_convertida, 'SAIDA',
                                  lote['setor_origem_id'], lote['local_origem_id'])
                     ajustar_saldo(db, item['id_produto'], qtd_convertida, 'ENTRADA',
-                                 lote['setor_destino_id'], lote['local_destino_id'])
+                                 lote['setor_destino_id'], lote['local_destino_id'], custo_unitario=custo_unit)
             
             else:
-                # ENTRADA ou SAIDA normal
-                valor_total = qtd_convertida * preco_custo_unitario
                 if tipo == 'SAIDA':
-                    valor_total = -valor_total
+                    preco_custo_unitario = obter_custo_medio(db, item['id_produto'], lote['setor_origem_id'], lote['local_origem_id'])
+                    valor_total = -qtd_convertida * preco_custo_unitario
+                else:
+                    preco_custo_unitario = item['preco_custo_unitario'] or item['preco_custo'] or 0.0
+                    valor_total = qtd_convertida * preco_custo_unitario
                 
                 db.execute('''
                     INSERT INTO movimentacoes (
@@ -892,7 +897,7 @@ def aprovar_lote(id_lote):
                 if item['controla_estoque']:
                     if tipo == 'ENTRADA':
                         ajustar_saldo(db, item['id_produto'], qtd_convertida, tipo,
-                                     lote['setor_destino_id'], lote['local_destino_id'])
+                                     lote['setor_destino_id'], lote['local_destino_id'], custo_unitario=preco_custo_unitario)
                     else:  # SAIDA
                         ajustar_saldo(db, item['id_produto'], qtd_convertida, tipo,
                                      lote['setor_origem_id'], lote['local_origem_id'])

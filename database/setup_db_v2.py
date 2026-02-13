@@ -208,6 +208,8 @@ def criar_tabelas(conn):
             setor_id INTEGER,
             local_id INTEGER,
             saldo REAL NOT NULL DEFAULT 0.0,
+            valor_total REAL NOT NULL DEFAULT 0.0,
+            custo_medio REAL NOT NULL DEFAULT 0.0,
             FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE,
             FOREIGN KEY (setor_id) REFERENCES setores(id) ON DELETE CASCADE,
             FOREIGN KEY (local_id) REFERENCES locais(id) ON DELETE CASCADE,

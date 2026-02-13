@@ -105,116 +105,122 @@
     
     {% if lote.tipo == 'ENTRADA' %}
     <!-- Dados Financeiros -->
-    <div id="secao-financeiro" class="bg-slate-800 rounded-lg p-6 mb-6 border border-slate-700">
-        <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-3">
-                <h2 class="text-xl font-bold text-gray-100">Dados financeiros</h2>
-                <span class="text-xs text-amber-400">Apenas ENTRADA</span>
-                {% if lote.exportado_financeiro %}
-                <span class="px-2 py-1 text-xs rounded bg-emerald-900 text-emerald-300 border border-emerald-500">Exportado</span>
-                {% endif %}
-            </div>
-            
-        </div>
-
+    <div id="secao-financeiro" class="mb-6 space-y-4">
         <form id="form-financeiro" class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                    <label class="block text-gray-300 mb-2 font-semibold">Fornecedor <span class="text-red-500">*</span></label>
-                    <input id="financeiro-fornecedor-busca" type="text" placeholder="Digite para filtrar" class="w-full p-2 mb-2 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm">
-                    <select id="financeiro-fornecedor" required class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
-                        <option value="">Carregando...</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-gray-300 mb-2 font-semibold">Plano de contas <span class="text-red-500">*</span></label>
-                    <input id="financeiro-plano-busca" type="text" placeholder="Digite para filtrar" class="w-full p-2 mb-2 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm">
-                    <select id="financeiro-plano" required class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
-                        <option value="">Carregando...</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-gray-300 mb-2 font-semibold">Nº documento</label>
-                    <input id="financeiro-num-doc" type="text" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="NF, pedido...">
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-gray-300 mb-2 font-semibold">Valor total</label>
-                    <input id="financeiro-valor-total" type="number" step="0.01" min="0" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
-                    <p class="text-xs text-gray-400 mt-1">Soma dos itens, editável.</p>
-                </div>
-                <div>
-                    <label class="block text-gray-300 mb-2 font-semibold">Data emissão</label>
-                    <input id="financeiro-emissao" type="date" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div class="flex items-end gap-2">
-                    <div class="flex items-center gap-2">
-                        <input id="financeiro-pago" type="checkbox" class="w-4 h-4 text-emerald-500">
-                        <label for="financeiro-pago" class="text-gray-200 font-semibold">Pagamento efetuado?</label>
+            <!-- Card: Fornecedor e referência -->
+            <div class="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-xl font-bold text-gray-100">Dados financeiros</h2>
+                        <span class="text-xs text-amber-400">Apenas ENTRADA</span>
+                        {% if lote.exportado_financeiro %}
+                        <span class="px-2 py-1 text-xs rounded bg-emerald-900 text-emerald-300 border border-emerald-500">Exportado</span>
+                        {% endif %}
                     </div>
                 </div>
-                <div class="pagamento-field hidden">
-                    <label class="block text-gray-300 mb-2 font-semibold">Valor pago</label>
-                    <input id="financeiro-valor-pago" type="number" step="0.01" min="0" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" disabled>
-                </div>
-                <div class="pagamento-field hidden">
-                    <label class="block text-gray-300 mb-2 font-semibold">Data pagamento</label>
-                    <input id="financeiro-data-pago" type="date" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" disabled>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="relative">
+                        <label class="block text-gray-300 mb-2 font-semibold">Fornecedor <span class="text-red-500">*</span></label>
+                        <input id="financeiro-fornecedor-search" type="text" placeholder="Digite para filtrar" autocomplete="off" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm">
+                        <input type="hidden" id="financeiro-fornecedor-id">
+                        <div id="financeiro-fornecedor-results" class="absolute z-20 w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg max-h-48 overflow-y-auto hidden"></div>
+                    </div>
+                    <div class="relative">
+                        <label class="block text-gray-300 mb-2 font-semibold">Plano de contas <span class="text-red-500">*</span></label>
+                        <input id="financeiro-plano-search" type="text" placeholder="Digite para filtrar" autocomplete="off" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm">
+                        <input type="hidden" id="financeiro-plano-id">
+                        <div id="financeiro-plano-results" class="absolute z-20 w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg max-h-48 overflow-y-auto hidden"></div>
+                    </div>
+                    <div>
+                        <label class="block text-gray-300 mb-2 font-semibold">Nº documento</label>
+                        <input id="financeiro-num-doc" type="text" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="NF, pedido...">
+                    </div>
                 </div>
             </div>
 
-            <div class="flex flex-col md:flex-row md:items-end gap-3">
-                <div class="md:w-40">
-                    <label class="block text-gray-300 mb-2 font-semibold">Nº parcelas</label>
-                    <input id="financeiro-qtd-parcelas" type="number" min="1" value="1" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+            <!-- Card: Financeiro / pagamento -->
+            <div class="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                    <div>
+                        <label class="block text-gray-300 mb-2 font-semibold">Valor total</label>
+                        <input id="financeiro-valor-total" type="number" step="0.01" min="0" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <p class="text-xs text-gray-400 mt-1">Soma dos itens, editável.</p>
+                    </div>
+                    <div>
+                        <label class="block text-gray-300 mb-2 font-semibold">Data emissão</label>
+                        <input id="financeiro-emissao" type="date" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
                 </div>
-                <div class="flex-1">
-                    <label class="block text-gray-300 mb-2 font-semibold">Vencimento base</label>
-                    <input id="financeiro-venc-base" type="date" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                    <div class="flex items-end gap-2">
+                        <div class="flex items-center gap-2">
+                            <input id="financeiro-pago" type="checkbox" class="w-4 h-4 text-emerald-500">
+                            <label for="financeiro-pago" class="text-gray-200 font-semibold">Pagamento efetuado?</label>
+                        </div>
+                    </div>
+                    <div class="pagamento-field hidden">
+                        <label class="block text-gray-300 mb-2 font-semibold">Valor pago</label>
+                        <input id="financeiro-valor-pago" type="number" step="0.01" min="0" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" disabled>
+                    </div>
+                    <div class="pagamento-field hidden">
+                        <label class="block text-gray-300 mb-2 font-semibold">Data pagamento</label>
+                        <input id="financeiro-data-pago" type="date" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" disabled>
+                    </div>
                 </div>
-                <div class="md:w-48">
-                    <button type="button" id="btn-gerar-parcelas" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-lg transition">
-                        Gerar parcelas
+
+                <div class="flex flex-col md:flex-row md:items-end gap-3 mb-4">
+                    <div class="md:w-40">
+                        <label class="block text-gray-300 mb-2 font-semibold">Nº parcelas</label>
+                        <input id="financeiro-qtd-parcelas" type="number" min="1" value="1" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-gray-300 mb-2 font-semibold">Vencimento base</label>
+                        <input id="financeiro-venc-base" type="date" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div class="md:w-48">
+                        <button type="button" id="btn-gerar-parcelas" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-lg transition">
+                            Gerar parcelas
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto border border-slate-700 rounded-lg">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-700 text-gray-400">
+                                <th class="text-left py-2 px-3">Parcela</th>
+                                <th class="text-left py-2 px-3">Vencimento</th>
+                                <th class="text-left py-2 px-3">Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody id="parcelas-body" class="text-gray-200"></tbody>
+                        <tfoot>
+                            <tr class="border-t border-slate-700 font-bold text-amber-400">
+                                <td colspan="2" class="py-2 px-3 text-right">Soma das parcelas:</td>
+                                <td class="py-2 px-3" id="parcelas-soma">R$ 0,00</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Card: Observação e ações -->
+            <div class="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div class="mb-4">
+                    <label class="block text-gray-300 mb-2 font-semibold">Observação</label>
+                    <textarea id="financeiro-observacao" rows="3" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Anotações internas"></textarea>
+                </div>
+
+                <div class="flex flex-col md:flex-row gap-3">
+                    <button type="submit" id="btn-salvar-financeiro" class="w-full md:w-56 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition">
+                        Salvar dados financeiros
                     </button>
+                    <p id="financeiro-aviso-leitura" class="text-sm text-gray-300 md:flex-1 md:self-center hidden"></p>
                 </div>
+                <p id="financeiro-status" class="text-sm text-gray-300 mt-2"></p>
             </div>
-
-            <div class="overflow-x-auto border border-slate-700 rounded-lg">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-slate-700 text-gray-400">
-                            <th class="text-left py-2 px-3">Parcela</th>
-                            <th class="text-left py-2 px-3">Vencimento</th>
-                            <th class="text-left py-2 px-3">Valor</th>
-                        </tr>
-                    </thead>
-                    <tbody id="parcelas-body" class="text-gray-200"></tbody>
-                    <tfoot>
-                        <tr class="border-t border-slate-700 font-bold text-amber-400">
-                            <td colspan="2" class="py-2 px-3 text-right">Soma das parcelas:</td>
-                            <td class="py-2 px-3" id="parcelas-soma">R$ 0,00</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-
-            <div>
-                <label class="block text-gray-300 mb-2 font-semibold">Observação</label>
-                <textarea id="financeiro-observacao" rows="3" class="w-full p-3 bg-slate-700 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Anotações internas"></textarea>
-            </div>
-
-            <div class="flex flex-col md:flex-row gap-3">
-                <button type="submit" id="btn-salvar-financeiro" class="w-full md:w-56 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition">
-                    Salvar dados financeiros
-                </button>
-                <p id="financeiro-aviso-leitura" class="text-sm text-gray-300 md:flex-1 md:self-center hidden"></p>
-            </div>
-            <p id="financeiro-status" class="text-sm text-gray-300"></p>
         </form>
     </div>
     {% endif %}
@@ -700,8 +706,6 @@ function initFinanceiro() {
     });
 
     document.getElementById('financeiro-pago').addEventListener('change', togglePagamentoCampos);
-    document.getElementById('financeiro-fornecedor-busca').addEventListener('input', filtrarFornecedores);
-    document.getElementById('financeiro-plano-busca').addEventListener('input', filtrarPlanos);
     btnGerar.addEventListener('click', gerarParcelasAuto);
     document.getElementById('form-financeiro').addEventListener('submit', salvarFinanceiro);
 
@@ -716,27 +720,16 @@ async function carregarCatalogosFinanceiros() {
     FORNECEDORES_CACHE = await forResp.json();
     PLANOS_CACHE = await planoResp.json();
 
-    popularSelect('financeiro-fornecedor', FORNECEDORES_CACHE, 'id', 'nome');
-    popularSelect('financeiro-plano', PLANOS_CACHE, 'id', 'descricao');
-}
-
-function popularSelect(id, dados, valueKey, labelKey) {
-    const sel = document.getElementById(id);
-    sel.innerHTML = '<option value="">Selecione...</option>';
-    dados.forEach(item => {
-        const opt = document.createElement('option');
-        opt.value = item[valueKey];
-        opt.textContent = item[labelKey];
-        sel.appendChild(opt);
-    });
+    initTypeahead('financeiro-fornecedor', FORNECEDORES_CACHE, f => `${f.nome}${f.cnpj ? ' — ' + f.cnpj : ''}`);
+    initTypeahead('financeiro-plano', PLANOS_CACHE, p => `${p.codigo ? p.codigo + ' — ' : ''}${p.descricao}`);
 }
 
 function preencherFinanceiroInicial() {
     const valorTotalInput = document.getElementById('financeiro-valor-total');
     const emissaoInput = document.getElementById('financeiro-emissao');
     const numDocInput = document.getElementById('financeiro-num-doc');
-    const fornecedorSel = document.getElementById('financeiro-fornecedor');
-    const planoSel = document.getElementById('financeiro-plano');
+    const fornecedorId = document.getElementById('financeiro-fornecedor-id');
+    const planoId = document.getElementById('financeiro-plano-id');
     const obs = document.getElementById('financeiro-observacao');
 
     const pagoChk = document.getElementById('financeiro-pago');
@@ -744,8 +737,8 @@ function preencherFinanceiroInicial() {
     const dataPago = document.getElementById('financeiro-data-pago');
 
     if (FINANCE_PREFILL) {
-        fornecedorSel.value = FINANCE_PREFILL.id_fornecedor;
-        planoSel.value = FINANCE_PREFILL.id_plano_contas;
+        setTypeaheadValue('financeiro-fornecedor', FORNECEDORES_CACHE, FINANCE_PREFILL.id_fornecedor, f => `${f.nome}${f.cnpj ? ' — ' + f.cnpj : ''}`);
+        setTypeaheadValue('financeiro-plano', PLANOS_CACHE, FINANCE_PREFILL.id_plano_contas, p => `${p.codigo ? p.codigo + ' — ' : ''}${p.descricao}`);
         numDocInput.value = FINANCE_PREFILL.num_doc || '';
         valorTotalInput.value = FINANCE_PREFILL.valor_total || '';
         emissaoInput.value = (FINANCE_PREFILL.data_emissao || '').split('T')[0] || '';
@@ -850,22 +843,55 @@ function valoresIguais(a, b) {
     return Math.abs((a || 0) - (b || 0)) < 0.01;
 }
 
-function filtrarFornecedores() {
-    const termo = normalize(document.getElementById('financeiro-fornecedor-busca').value);
-    const filtrados = FORNECEDORES_CACHE.filter(f => normalize(f.nome).includes(termo));
-    popularSelect('financeiro-fornecedor', filtrados, 'id', 'nome');
-    if (FINANCE_PREFILL && filtrados.some(f => f.id === FINANCE_PREFILL.id_fornecedor)) {
-        document.getElementById('financeiro-fornecedor').value = FINANCE_PREFILL.id_fornecedor;
-    }
+function initTypeahead(prefix, data, labelFn) {
+    const input = document.getElementById(`${prefix}-search`);
+    const hidden = document.getElementById(`${prefix}-id`);
+    const results = document.getElementById(`${prefix}-results`);
+
+    const render = (items) => {
+        results.innerHTML = '';
+        if (!items.length) {
+            results.classList.add('hidden');
+            return;
+        }
+        items.slice(0, 12).forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'px-3 py-2 hover:bg-slate-700 cursor-pointer text-sm text-gray-100';
+            div.textContent = labelFn(item);
+            div.onclick = () => {
+                input.value = labelFn(item);
+                hidden.value = item.id;
+                results.classList.add('hidden');
+                results.innerHTML = '';
+            };
+            results.appendChild(div);
+        });
+        results.classList.remove('hidden');
+    };
+
+    input.addEventListener('input', () => {
+        const termo = normalize(input.value);
+        if (termo.length < 1) {
+            results.classList.add('hidden');
+            results.innerHTML = '';
+            hidden.value = '';
+            return;
+        }
+        const filtrados = data.filter(item => normalize(labelFn(item)).includes(termo));
+        render(filtrados);
+    });
+
+    input.addEventListener('blur', () => {
+        setTimeout(() => results.classList.add('hidden'), 150);
+    });
 }
 
-function filtrarPlanos() {
-    const termo = normalize(document.getElementById('financeiro-plano-busca').value);
-    const filtrados = PLANOS_CACHE.filter(p => normalize(p.descricao || '').includes(termo) || normalize(p.codigo || '').includes(termo));
-    popularSelect('financeiro-plano', filtrados, 'id', 'descricao');
-    if (FINANCE_PREFILL && filtrados.some(p => p.id === FINANCE_PREFILL.id_plano_contas)) {
-        document.getElementById('financeiro-plano').value = FINANCE_PREFILL.id_plano_contas;
-    }
+function setTypeaheadValue(prefix, data, id, labelFn) {
+    if (!id) return;
+    const item = data.find(i => i.id === id);
+    if (!item) return;
+    document.getElementById(`${prefix}-id`).value = item.id;
+    document.getElementById(`${prefix}-search`).value = labelFn(item);
 }
 
 async function salvarFinanceiro(event) {
@@ -873,8 +899,8 @@ async function salvarFinanceiro(event) {
     if (!CAN_EDIT_FIN) return;
 
     const payload = {
-        id_fornecedor: parseInt(document.getElementById('financeiro-fornecedor').value, 10),
-        id_plano_contas: parseInt(document.getElementById('financeiro-plano').value, 10),
+        id_fornecedor: parseInt(document.getElementById('financeiro-fornecedor-id').value, 10),
+        id_plano_contas: parseInt(document.getElementById('financeiro-plano-id').value, 10),
         num_doc: document.getElementById('financeiro-num-doc').value.trim(),
         observacao: document.getElementById('financeiro-observacao').value.trim(),
         valor_total: parseFloat(document.getElementById('financeiro-valor-total').value || '0'),
@@ -906,8 +932,8 @@ async function salvarFinanceiro(event) {
 
 function validarFinanceiroPreAprovacao() {
     const erros = [];
-    const fornecedor = document.getElementById('financeiro-fornecedor').value;
-    const plano = document.getElementById('financeiro-plano').value;
+    const fornecedor = document.getElementById('financeiro-fornecedor-id').value;
+    const plano = document.getElementById('financeiro-plano-id').value;
     const valorTotalFin = parseFloat(document.getElementById('financeiro-valor-total').value || '0');
     const emissao = document.getElementById('financeiro-emissao').value;
     const pagoChk = document.getElementById('financeiro-pago');

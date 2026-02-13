@@ -92,6 +92,38 @@ def _cmv_movtos(db, data_inicio, data_fim, categoria_id=None):
 	return float(row['cmv'] or 0.0), float(row['entradas'] or 0.0)
 
 
+def _estoque_por_inventario(db, inventario_id, categoria_id=None):
+	"""Calcula o valor do estoque a partir de uma contagem (inventário) específica."""
+	filtros = ['c.id_inventario = ?']
+	params = [inventario_id]
+	join_categoria = ''
+
+	if categoria_id:
+		join_categoria = 'JOIN produto_categoria_inventario pci ON pci.id_produto = p.id'
+		filtros.append('pci.id_categoria = ?')
+		params.append(categoria_id)
+
+	where_sql = ' AND '.join(filtros)
+
+	row = db.execute(
+		f'''
+		SELECT 
+			COALESCE(SUM(c.quantidade_padrao), 0) AS quantidade_total,
+			COALESCE(SUM(c.quantidade_padrao * COALESCE(c.preco_custo_snapshot, 0)), 0) AS valor_total
+		FROM contagens c
+		JOIN inventarios i ON i.id = c.id_inventario
+		JOIN produtos p ON p.id = c.id_produto
+		{join_categoria}
+		WHERE {where_sql} AND p.ativo = 1 AND p.controla_estoque = 1
+		''',
+		params
+	).fetchone()
+
+	qtd = float(row['quantidade_total'] or 0.0)
+	valor = float(row['valor_total'] or 0.0)
+	return qtd, valor
+
+
 def _series_snapshots(db, data_inicio, data_fim, categoria_id=None, granularidade='semanal'):
 	series = []
 
@@ -143,14 +175,23 @@ def relatorio_cmv():
 	data_fim = _parse_date(request.args.get('data_fim'), default=date.today())
 	categoria_id = request.args.get('categoria_id', type=int)
 	granularidade = request.args.get('granularidade', 'semanal')
+	inventario_inicio_id = request.args.get('inventario_inicio_id', type=int)
+	inventario_fim_id = request.args.get('inventario_fim_id', type=int)
 
 	if data_inicio > data_fim:
 		data_inicio, data_fim = data_fim, data_inicio
 
-	# Estoque inicial: snapshot do dia anterior a data_inicio
-	estoque_inicial = _snapshot_em(db, data_inicio - timedelta(days=1), categoria_id)
-	# Estoque final: último snapshot disponível até data_fim
-	_, estoque_final = _ultimo_snapshot_por_periodo(db, data_inicio, data_fim, categoria_id)
+	# Estoque inicial: snapshot anterior ou inventário selecionado
+	if inventario_inicio_id:
+		_, estoque_inicial = _estoque_por_inventario(db, inventario_inicio_id, categoria_id)
+	else:
+		estoque_inicial = _snapshot_em(db, data_inicio - timedelta(days=1), categoria_id)
+
+	# Estoque final: último snapshot até data_fim ou inventário selecionado
+	if inventario_fim_id:
+		_, estoque_final = _estoque_por_inventario(db, inventario_fim_id, categoria_id)
+	else:
+		_, estoque_final = _ultimo_snapshot_por_periodo(db, data_inicio, data_fim, categoria_id)
 
 	cmv_movto, entradas = _cmv_movtos(db, data_inicio, data_fim, categoria_id)
 
@@ -165,13 +206,28 @@ def relatorio_cmv():
 		).fetchall()
 	]
 
+	inventarios = [
+		dict(r) for r in db.execute(
+			"""
+			SELECT id, descricao, data_criacao, data_fechamento, status
+			FROM inventarios
+			WHERE DATE(data_criacao) BETWEEN ? AND ?
+			ORDER BY DATE(data_criacao) DESC
+			""",
+			(data_inicio.isoformat(), data_fim.isoformat())
+		).fetchall()
+	]
+
 	return render_template(
 		'admin/relatorio_cmv.html',
 		data_inicio=data_inicio,
 		data_fim=data_fim,
 		categoria_id=categoria_id,
 		categorias=categorias,
+		inventarios=inventarios,
 		granularidade=granularidade,
+		inventario_inicio_id=inventario_inicio_id,
+		inventario_fim_id=inventario_fim_id,
 		estoque_inicial=round(estoque_inicial, 2),
 		estoque_final=round(estoque_final, 2),
 		entradas=round(entradas, 2),
@@ -191,10 +247,19 @@ def relatorio_cmv_json():
 	data_fim = _parse_date(request.args.get('data_fim'), default=date.today())
 	categoria_id = request.args.get('categoria_id', type=int)
 	granularidade = request.args.get('granularidade', 'semanal')
+	inventario_inicio_id = request.args.get('inventario_inicio_id', type=int)
+	inventario_fim_id = request.args.get('inventario_fim_id', type=int)
 
 	cmv_movto, entradas = _cmv_movtos(db, data_inicio, data_fim, categoria_id)
-	estoque_inicial = _snapshot_em(db, data_inicio - timedelta(days=1), categoria_id)
-	_, estoque_final = _ultimo_snapshot_por_periodo(db, data_inicio, data_fim, categoria_id)
+	if inventario_inicio_id:
+		_, estoque_inicial = _estoque_por_inventario(db, inventario_inicio_id, categoria_id)
+	else:
+		estoque_inicial = _snapshot_em(db, data_inicio - timedelta(days=1), categoria_id)
+
+	if inventario_fim_id:
+		_, estoque_final = _estoque_por_inventario(db, inventario_fim_id, categoria_id)
+	else:
+		_, estoque_final = _ultimo_snapshot_por_periodo(db, data_inicio, data_fim, categoria_id)
 	cmv_teorico = estoque_inicial + entradas - estoque_final
 	diferenca = cmv_movto - cmv_teorico
 	series = _series_snapshots(db, data_inicio, data_fim, categoria_id, granularidade)

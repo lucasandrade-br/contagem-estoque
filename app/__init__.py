@@ -65,10 +65,44 @@ def create_app(config_object=None):
     # Database
     init_db(app)
 
+    def _garantir_colunas_financeiras():
+        """Garante que estoque_saldos tenha valor_total e custo_medio sem sobrescrever dados existentes."""
+        db = get_db()
+        cols = {row['name'] for row in db.execute('PRAGMA table_info(estoque_saldos)').fetchall()}
+
+        precisa_seed = False
+        if 'valor_total' not in cols:
+            db.execute('ALTER TABLE estoque_saldos ADD COLUMN valor_total REAL NOT NULL DEFAULT 0.0')
+            precisa_seed = True
+        if 'custo_medio' not in cols:
+            db.execute('ALTER TABLE estoque_saldos ADD COLUMN custo_medio REAL NOT NULL DEFAULT 0.0')
+            precisa_seed = True
+
+        if not precisa_seed:
+            row = db.execute(
+                '''SELECT COUNT(*) AS faltantes FROM estoque_saldos
+                   WHERE saldo <> 0 AND valor_total = 0'''
+            ).fetchone()
+            precisa_seed = row and row['faltantes'] > 0
+
+        if precisa_seed:
+            db.execute('''
+                UPDATE estoque_saldos es
+                SET valor_total = CASE
+                    WHEN valor_total = 0 THEN COALESCE((SELECT COALESCE(p.preco_custo, 0) * es.saldo FROM produtos p WHERE p.id = es.produto_id), 0)
+                    ELSE valor_total
+                END
+            ''')
+            db.execute('''
+                UPDATE estoque_saldos
+                SET custo_medio = CASE WHEN saldo <> 0 THEN valor_total / saldo ELSE 0 END
+            ''')
+            db.commit()
+
     # Snapshot diário do dia anterior (preenche gaps até ontem)
     def _gerar_snapshot_dia(db, data_ref):
         sql = '''
-            SELECT es.produto_id, SUM(es.saldo) AS saldo, p.preco_custo
+            SELECT es.produto_id, SUM(es.saldo) AS saldo, SUM(es.valor_total) AS valor_total
             FROM estoque_saldos es
             JOIN produtos p ON p.id = es.produto_id
             WHERE p.ativo = 1 AND p.controla_estoque = 1
@@ -80,15 +114,15 @@ def create_app(config_object=None):
             saldo = float(r['saldo'] or 0)
             if saldo <= 0:
                 continue
-            preco = float(r['preco_custo'] or 0)
-            valor = saldo * preco
+            valor_total = float(r['valor_total'] or 0)
+            custo = (valor_total / saldo) if saldo > 0 else 0.0
             db.execute(
                 '''
                 INSERT OR IGNORE INTO saldos_historico 
                 (data_ref, produto_id, quantidade, preco_custo_unitario, valor_total)
                 VALUES (?, ?, ?, ?, ?)
                 ''',
-                (data_ref.isoformat(), r['produto_id'], saldo, preco, valor)
+                (data_ref.isoformat(), r['produto_id'], saldo, custo, valor_total)
             )
             inseridos += 1
 
@@ -133,6 +167,7 @@ def create_app(config_object=None):
 
     with app.app_context():
         try:
+            _garantir_colunas_financeiras()
             _gerar_snapshots_pendentes()
         except Exception:
             # Não bloquear startup; logar no stderr

@@ -107,7 +107,6 @@ def registrar_movimento(db, produto_id, tipo, quantidade_original, motivo,
     if not produto:
         raise ValueError(f"Produto ID {produto_id} não encontrado")
     
-    estoque_atual = float(produto['estoque_atual'] or 0)
     controla_estoque = int(produto['controla_estoque'])
     preco_custo = float(produto['preco_custo'] or 0.0)
     
@@ -124,29 +123,29 @@ def registrar_movimento(db, produto_id, tipo, quantidade_original, motivo,
         "SELECT valor FROM configs WHERE chave = 'PERMITIR_ESTOQUE_NEGATIVO'"
     ).fetchone()
     permite_negativo = int(config_negativo['valor']) if config_negativo else 0
-    
+
+    # Saldo atual (modo central) e custo médio vigente
+    saldo_atual = obter_saldo(db, produto_id)
+    custo_medio_atual = obter_custo_medio(db, produto_id)
+
     # Calcular novo saldo (sempre usar quantidade convertida)
     if tipo == 'SAIDA':
-        novo_saldo = estoque_atual - quantidade_convertida
-        # Verificar se permite estoque negativo
+        novo_saldo = saldo_atual - quantidade_convertida
         if not permite_negativo and novo_saldo < 0 and controla_estoque:
             raise ValueError(
-                f"Estoque insuficiente! Disponível: {estoque_atual:.2f}, "
+                f"Estoque insuficiente! Disponível: {saldo_atual:.2f}, "
                 f"Solicitado: {quantidade_convertida:.2f}"
             )
     else:  # ENTRADA
-        novo_saldo = estoque_atual + quantidade_convertida
-    
-    # Calcular valor financeiro da movimentação
-    # Usar quantidade ORIGINAL (a que o usuário digitou) para cálculo do valor
-    # Exemplo ENTRADA: +10 sacos × R$ 85,00/saco = +R$ 850,00
-    # Exemplo SAÍDA: -10 sacos × R$ 85,00/saco = -R$ 850,00
-    preco_custo_unitario = preco_custo
-    valor_total = quantidade_original * preco_custo_unitario
-    
-    # Aplicar sinal negativo para SAÍDAs (reduz valor do estoque)
+        novo_saldo = saldo_atual + quantidade_convertida
+
+    # Calcular valor financeiro da movimentação usando custo informado ou custo médio
     if tipo == 'SAIDA':
-        valor_total = -valor_total
+        preco_custo_unitario = custo_medio_atual
+        valor_total = -quantidade_convertida * preco_custo_unitario
+    else:
+        preco_custo_unitario = preco_custo
+        valor_total = quantidade_convertida * preco_custo_unitario
     
     # 1. Inserir movimentação na tabela movimentacoes
     cursor = db.execute('''
@@ -168,14 +167,10 @@ def registrar_movimento(db, produto_id, tipo, quantidade_original, motivo,
     
     # 2. Atualizar saldo na tabela estoque_saldos (apenas se controla_estoque = 1)
     if controla_estoque:
-        # Sempre grava em estoque_saldos no modo CENTRAL (setor_id=NULL, local_id=NULL)
-        # Calcula a diferença para ajustar o saldo
-        diferenca = quantidade_convertida if tipo == 'ENTRADA' else -quantidade_convertida
-        
-        # UPSERT em estoque_saldos (modo CENTRAL)
-        _ajustar_saldo_tabela(db, produto_id, abs(diferenca), 
-                             setor_id=None, local_id=None, 
-                             incremento=(diferenca > 0))
+        if tipo == 'ENTRADA':
+            ajustar_saldo(db, produto_id, quantidade_convertida, 'ENTRADA', custo_unitario=preco_custo_unitario)
+        else:
+            ajustar_saldo(db, produto_id, quantidade_convertida, 'SAIDA')
     
     # 3. Registrar no log de auditoria
     if fator_conversao != 1.0 or unidade_movimentacao:
@@ -184,7 +179,7 @@ def registrar_movimento(db, produto_id, tipo, quantidade_original, motivo,
         acao_desc = f"{tipo} - {motivo}: {quantidade_convertida:.2f} un. do produto '{produto['nome']}' | Valor: R$ {valor_total:.2f}"
     
     if controla_estoque:
-        acao_desc += f" | Saldo: {estoque_atual:.2f} → {novo_saldo:.2f}"
+        acao_desc += f" | Saldo: {saldo_atual:.2f} → {novo_saldo:.2f}"
     else:
         acao_desc += " | (Produto sem controle de estoque)"
     
@@ -223,112 +218,144 @@ def obter_nivel_controle(db):
 
 
 def obter_saldo(db, produto_id, setor_id=None, local_id=None):
-    """
-    Obtém o saldo de um produto da tabela estoque_saldos.
-    
-    Args:
-        db: Conexão com banco de dados
-        produto_id: ID do produto
-        setor_id: ID do setor (opcional, None = CENTRAL)
-        local_id: ID do local (opcional, None = sem local específico)
-    
-    Returns:
-        float: Saldo disponível
-    """
+    """Obtém o saldo disponível considerando o nível de controle."""
     nivel = obter_nivel_controle(db)
-    
+
     if nivel == 'CENTRAL':
-        # Saldo CENTRAL = soma de TODOS os registros do produto em estoque_saldos
-        saldo_row = db.execute('''
-            SELECT COALESCE(SUM(saldo), 0) as saldo_total
-            FROM estoque_saldos 
-            WHERE produto_id = ?
-        ''', (produto_id,)).fetchone()
-        return float(saldo_row['saldo_total']) if saldo_row else 0.0
-    
-    elif nivel == 'SETOR':
-        # Saldo por setor específico
-        saldo_row = db.execute('''
-            SELECT saldo FROM estoque_saldos 
-            WHERE produto_id = ? AND setor_id = ? AND local_id IS NULL
-        ''', (produto_id, setor_id)).fetchone()
-        return float(saldo_row['saldo']) if saldo_row else 0.0
-    
-    elif nivel == 'LOCAL':
-        # Saldo por local específico
-        saldo_row = db.execute('''
-            SELECT saldo FROM estoque_saldos 
-            WHERE produto_id = ? AND setor_id = ? AND local_id = ?
-        ''', (produto_id, setor_id, local_id)).fetchone()
-        return float(saldo_row['saldo']) if saldo_row else 0.0
-    
+        row = db.execute(
+            '''SELECT COALESCE(SUM(saldo), 0) AS saldo_total
+               FROM estoque_saldos
+               WHERE produto_id = ?''',
+            (produto_id,)
+        ).fetchone()
+        return float(row['saldo_total']) if row else 0.0
+
+    if nivel == 'SETOR':
+        row = db.execute(
+            '''SELECT saldo FROM estoque_saldos
+               WHERE produto_id = ? AND setor_id = ? AND local_id IS NULL''',
+            (produto_id, setor_id)
+        ).fetchone()
+        return float(row['saldo']) if row else 0.0
+
+    if nivel == 'LOCAL':
+        row = db.execute(
+            '''SELECT saldo FROM estoque_saldos
+               WHERE produto_id = ? AND setor_id = ? AND local_id = ?''',
+            (produto_id, setor_id, local_id)
+        ).fetchone()
+        return float(row['saldo']) if row else 0.0
+
     return 0.0
 
 
-def ajustar_saldo(db, produto_id, quantidade_convertida, tipo, 
-                  setor_id=None, local_id=None):
-    """
-    Ajusta o saldo de um produto na tabela estoque_saldos.
-    
-    Args:
-        db: Conexão com banco de dados
-        produto_id: ID do produto
-        quantidade_convertida: Quantidade em unidade padrão (positiva)
-        tipo: 'ENTRADA', 'SAIDA' ou 'TRANSFERENCIA'
-        setor_id: ID do setor (None = CENTRAL)
-        local_id: ID do local (None = sem local específico)
-    """
+def obter_custo_medio(db, produto_id, setor_id=None, local_id=None):
+    """Retorna custo médio atual da posição (ou 0.0 se inexistente)."""
+    posicao = _obter_posicao_estoque(db, produto_id, setor_id, local_id)
+    return posicao['custo_medio']
+
+
+def _normalizar_localizacao(db, setor_id, local_id):
+    """Normaliza setor/local conforme nível configurado."""
     nivel = obter_nivel_controle(db)
-    
-    # SEMPRE usa estoque_saldos, setor_id/local_id definem o nível
     if nivel == 'CENTRAL':
-        # Modo CENTRAL: setor_id e local_id são NULL
-        setor_id = None
-        local_id = None
-    elif nivel == 'SETOR':
-        # Modo SETOR: local_id é NULL
-        local_id = None
-    # elif nivel == 'LOCAL': usa setor_id e local_id fornecidos
-    
-    # Executar ajuste em estoque_saldos
-    if tipo == 'ENTRADA':
-        _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
-                             setor_id, local_id, incremento=True)
-    elif tipo == 'SAIDA':
-        _ajustar_saldo_tabela(db, produto_id, quantidade_convertida, 
-                             setor_id, local_id, incremento=False)
-    # TRANSFERENCIA é tratada em lotes.py (SAIDA + ENTRADA)
+        return None, None
+    if nivel == 'SETOR':
+        return setor_id, None
+    return setor_id, local_id
 
 
-def _ajustar_saldo_tabela(db, produto_id, quantidade, setor_id, local_id, incremento=True):
-    """
-    Ajusta saldo na tabela estoque_saldos (UPSERT).
-    
-    Args:
-        incremento: True para adicionar, False para subtrair
-    """
-    operacao = '+' if incremento else '-'
-    
-    # Verificar se registro existe
-    existe = db.execute('''
-        SELECT id FROM estoque_saldos 
-        WHERE produto_id = ? AND setor_id = ? AND local_id IS ?
-    ''', (produto_id, setor_id, local_id)).fetchone()
-    
-    if existe:
-        # UPDATE
-        db.execute(f'''
-            UPDATE estoque_saldos 
-            SET saldo = saldo {operacao} ? 
-            WHERE produto_id = ? AND setor_id = ? AND local_id IS ?
-        ''', (quantidade, produto_id, setor_id, local_id))
+def _obter_posicao_estoque(db, produto_id, setor_id=None, local_id=None):
+    """Lê saldo, valor_total e custo_medio para a posição atual."""
+    setor_id, local_id = _normalizar_localizacao(db, setor_id, local_id)
+    nivel = obter_nivel_controle(db)
+
+    if nivel == 'CENTRAL':
+        row = db.execute(
+            '''SELECT COALESCE(SUM(saldo), 0) AS saldo,
+                      COALESCE(SUM(valor_total), 0) AS valor_total
+               FROM estoque_saldos
+               WHERE produto_id = ?''',
+            (produto_id,)
+        ).fetchone()
+        saldo = float(row['saldo'] or 0)
+        valor_total = float(row['valor_total'] or 0)
     else:
-        # INSERT
-        novo_saldo = quantidade if incremento else -quantidade
-        db.execute('''
-            INSERT INTO estoque_saldos (produto_id, setor_id, local_id, saldo)
-            VALUES (?, ?, ?, ?)
-        ''', (produto_id, setor_id, local_id, novo_saldo))
+        row = db.execute(
+            '''SELECT saldo, valor_total, custo_medio FROM estoque_saldos
+               WHERE produto_id = ? AND setor_id IS ? AND local_id IS ?''',
+            (produto_id, setor_id, local_id)
+        ).fetchone()
+        saldo = float(row['saldo'] or 0) if row else 0.0
+        valor_total = float(row['valor_total'] or 0) if row else 0.0
+
+    custo_medio = (valor_total / saldo) if saldo > 0 else 0.0
+    # Se não há linha (saldo zero), ainda retornamos custo_medio 0.0
+    if row and nivel != 'CENTRAL':
+        custo_medio = float(row['custo_medio'] or custo_medio)
+
+    return {
+        'saldo': saldo,
+        'valor_total': valor_total,
+        'custo_medio': custo_medio
+    }
+
+
+def ajustar_saldo(db, produto_id, quantidade_convertida, tipo,
+                  setor_id=None, local_id=None, custo_unitario=None):
+    """Atualiza saldo + valor financeiro, mantendo custo médio ponderado."""
+    setor_id, local_id = _normalizar_localizacao(db, setor_id, local_id)
+    pos = _obter_posicao_estoque(db, produto_id, setor_id, local_id)
+
+    qtd = float(quantidade_convertida or 0)
+    if qtd <= 0:
+        return
+
+    saldo_atual = pos['saldo']
+    valor_atual = pos['valor_total']
+    custo_atual = pos['custo_medio']
+
+    if tipo == 'ENTRADA':
+        custo_mov = float(custo_unitario or 0)
+        novo_valor = valor_atual + (qtd * custo_mov)
+        novo_saldo = round(saldo_atual + qtd, 2)
+        novo_custo = round((novo_valor / novo_saldo), 2) if novo_saldo > 0 else 0.0
+        _upsert_posicao(db, produto_id, setor_id, local_id, novo_saldo, novo_valor, novo_custo)
+
+    elif tipo == 'SAIDA':
+        custo_mov = custo_atual
+        valor_mov = qtd * custo_mov
+        novo_valor = valor_atual - valor_mov
+        novo_saldo = round(saldo_atual - qtd, 2)
+        novo_custo = round((novo_valor / novo_saldo), 2) if novo_saldo > 0 else 0.0
+        if novo_saldo <= 0:
+            novo_valor = 0.0
+            novo_custo = 0.0
+        _upsert_posicao(db, produto_id, setor_id, local_id, novo_saldo, novo_valor, novo_custo)
+    # TRANSFERENCIA = SAIDA + ENTRADA (tratada no chamador)
+
+
+def _upsert_posicao(db, produto_id, setor_id, local_id, saldo, valor_total, custo_medio):
+    """UPSERT na tabela estoque_saldos mantendo valor financeiro."""
+    existe = db.execute(
+        '''SELECT id FROM estoque_saldos
+           WHERE produto_id = ? AND setor_id IS ? AND local_id IS ?''',
+        (produto_id, setor_id, local_id)
+    ).fetchone()
+
+    if existe:
+        db.execute(
+            '''UPDATE estoque_saldos
+               SET saldo = ?, valor_total = ?, custo_medio = ?
+               WHERE produto_id = ? AND setor_id IS ? AND local_id IS ?''',
+            (saldo, valor_total, custo_medio, produto_id, setor_id, local_id)
+        )
+    else:
+        db.execute(
+            '''INSERT INTO estoque_saldos (produto_id, setor_id, local_id, saldo, valor_total, custo_medio)
+               VALUES (?, ?, ?, ?, ?, ?)''',
+            (produto_id, setor_id, local_id, saldo, valor_total, custo_medio)
+        )
 
 
 def validar_localizacao(db, tipo, setor_origem_id=None, local_origem_id=None,

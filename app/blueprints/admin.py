@@ -707,10 +707,8 @@ def preview_fechamento():
                 p.nome as produto_nome,
                 p.id_erp,
                 p.gtin,
-                COALESCE(
-                    (SELECT SUM(saldo) FROM estoque_saldos WHERE produto_id = p.id),
-                    0
-                ) as estoque_atual,
+                COALESCE((SELECT SUM(saldo) FROM estoque_saldos WHERE produto_id = p.id), 0) as estoque_atual,
+                COALESCE((SELECT SUM(valor_total) FROM estoque_saldos WHERE produto_id = p.id), 0) as valor_total_estoque,
                 p.preco_custo,
                 COALESCE(SUM(c.quantidade_padrao), 0) as quantidade_contada,
                 u.sigla as unidade_padrao,
@@ -741,10 +739,8 @@ def preview_fechamento():
                 p.nome as produto_nome,
                 p.id_erp,
                 p.gtin,
-                COALESCE(
-                    (SELECT SUM(saldo) FROM estoque_saldos WHERE produto_id = p.id),
-                    0
-                ) as estoque_atual,
+                COALESCE((SELECT SUM(saldo) FROM estoque_saldos WHERE produto_id = p.id), 0) as estoque_atual,
+                COALESCE((SELECT SUM(valor_total) FROM estoque_saldos WHERE produto_id = p.id), 0) as valor_total_estoque,
                 p.preco_custo,
                 COALESCE(SUM(c.quantidade_padrao), 0) as quantidade_contada,
                 u.sigla as unidade_padrao,
@@ -773,8 +769,9 @@ def preview_fechamento():
         estoque_sistema = float(produto['estoque_atual'] or 0)
         quantidade_contada = float(produto['quantidade_contada'] or 0)
         diferenca = quantidade_contada - estoque_sistema
-        preco_custo = float(produto['preco_custo'] or 0)
-        valor_ajuste = abs(diferenca) * preco_custo
+        valor_total_estoque = float(produto['valor_total_estoque'] or 0)
+        custo_medio_atual = (valor_total_estoque / estoque_sistema) if estoque_sistema > 0 else float(produto['preco_custo'] or 0)
+        valor_ajuste = abs(diferenca) * custo_medio_atual
         foi_contado = produto['total_contagens'] > 0
         
         # Determinar tipo de ajuste
@@ -812,7 +809,8 @@ def preview_fechamento():
             'tipo_ajuste': tipo_ajuste,
             'icone_ajuste': icone_ajuste,
             'cor_ajuste': cor_ajuste,
-            'preco_custo': preco_custo,
+            'preco_custo': float(produto['preco_custo'] or 0),
+            'custo_medio_atual': custo_medio_atual,
             'valor_ajuste': valor_ajuste,
             'unidade_padrao': produto['unidade_padrao'],
             'foi_contado': foi_contado
@@ -888,6 +886,7 @@ def confirmar_fechamento():
                 p.id as produto_id,
                 p.nome as produto_nome,
                 COALESCE((SELECT SUM(saldo) FROM estoque_saldos WHERE produto_id = p.id), 0) as estoque_atual,
+                COALESCE((SELECT SUM(valor_total) FROM estoque_saldos WHERE produto_id = p.id), 0) as valor_total_estoque,
                 p.preco_custo,
                 COALESCE(SUM(c.quantidade_padrao), 0) as quantidade_contada,
                 u.sigla as unidade_padrao
@@ -911,6 +910,7 @@ def confirmar_fechamento():
                 p.id as produto_id,
                 p.nome as produto_nome,
                 COALESCE((SELECT SUM(saldo) FROM estoque_saldos WHERE produto_id = p.id), 0) as estoque_atual,
+                COALESCE((SELECT SUM(valor_total) FROM estoque_saldos WHERE produto_id = p.id), 0) as valor_total_estoque,
                 p.preco_custo,
                 COALESCE(SUM(c.quantidade_padrao), 0) as quantidade_contada,
                 u.sigla as unidade_padrao
@@ -931,6 +931,8 @@ def confirmar_fechamento():
         estoque_sistema = float(produto['estoque_atual'] or 0)
         quantidade_contada = float(produto['quantidade_contada'] or 0)
         diferenca = quantidade_contada - estoque_sistema
+        valor_total_estoque = float(produto['valor_total_estoque'] or 0)
+        custo_medio_atual = (valor_total_estoque / estoque_sistema) if estoque_sistema > 0 else float(produto['preco_custo'] or 0)
         
         # Apenas gerar movimentação se houver diferença
         if abs(diferenca) > 0.001:  # Tolerância para erros de arredondamento
@@ -2511,7 +2513,7 @@ def lotes_exportar():
 
         linhas_financeiro = []
         for r in lotes_sel:
-            plano_str = r['plano_codigo']  
+            plano_str = r['plano_descricao'] if r['plano_descricao'] else (r['plano_codigo'] if r['plano_codigo'] else 'N/A')
 
             parcelas_lote = parcelas_por_lote.get(r['id'], [])
             if parcelas_lote:
